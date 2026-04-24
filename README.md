@@ -177,12 +177,52 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 
 If any selected model is gated or private, authenticate first with `hf auth login` or export `HF_TOKEN`.
 
-## Frontend Notes
+## Hardware Specs Requirements
 
-- The UI is a single-page app served from `templates/index.html`.
-- It supports both keyboard push-to-talk and pointer/touch recording.
-- The frontend renders trilingual text columns and can trigger TTS playback per language.
-- The page title and UI branding currently say `Nexto StreamWave`.
+These are practical deployment requirements for the current default stack in this repo:
+
+- `openai/whisper-large-v3`
+- `Helsinki-NLP/opus-mt-en-id`
+- `Helsinki-NLP/opus-mt-en-jap`
+- `facebook/mms-tts-eng`
+- `facebook/mms-tts-ind`
+- `suno/bark-small`
+
+They are not hard-coded startup checks, but they reflect what you should provision if you want the app to feel responsive.
+
+### Minimum usable target
+
+- GPU: NVIDIA CUDA GPU with at least `16 GB` VRAM
+- CPU: `8 vCPU` or better
+- System RAM: `16 GB`
+- Disk: `25 GB` free SSD space for environment, model cache, and temporary files
+- Network: stable internet for initial Hugging Face model download/authentication
+
+This tier is the practical floor for the shipped defaults. It may still feel tight during model load or if you keep `WHISPER_CONCURRENCY=2`.
+
+### Recommended production target
+
+- GPU: NVIDIA CUDA GPU with `24 GB` VRAM or more
+- CPU: `8-16 vCPU`
+- System RAM: `24-32 GB`
+- Disk: `40 GB+` free SSD space
+
+This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with the default Whisper, dual OpusMT models, and multilingual TTS loaded together.
+
+### Low-spec or fallback mode
+
+- CPU-only or Apple `mps` execution is technically possible because the runtime falls back from CUDA when needed, but it should be treated as development/debug mode rather than the intended interactive deployment path.
+- GPUs below `16 GB` VRAM are likely to require reducing model weight or runtime pressure, for example:
+  - lower `WHISPER_CONCURRENCY`
+  - switch to a smaller Whisper model
+  - disable or replace Bark-based Japanese TTS
+
+### Provisioning notes
+
+- The Japanese TTS path is the heaviest extra TTS load in the default setup because it uses `suno/bark-small`.
+- The two OpusMT models and two MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
+- Use SSD-backed storage. First boot can be much slower if the model cache has to be downloaded into a cold environment.
+- Match your PyTorch install to the CUDA version on the machine or RunPod image before starting the service.
 
 ## Notes
 
