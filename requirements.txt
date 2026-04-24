@@ -1,0 +1,15 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+numpy>=1.26.0
+soundfile>=0.12.1
+python-multipart>=0.0.9
+faster-whisper>=1.1.0
+# torch: no minimum version required — opus_service uses safetensors which bypasses CVE-2025-32434
+# Install the version matching your CUDA build, e.g.:
+#   pip install torch==2.4.1+cu124 --index-url https://download.pytorch.org/whl/cu124
+transformers>=4.45.0
+accelerate>=0.33.0
+sentencepiece>=0.2.0
+safetensors>=0.4.4
+# MarianMT (Helsinki-NLP OpusMT) dependency
+sacremoses>=0.1.1
