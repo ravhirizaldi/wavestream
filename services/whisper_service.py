@@ -100,6 +100,33 @@ class WhisperService:
             return self._transcribe_bytes_faster_whisper(audio_bytes)
         return self._transcribe_bytes_transformers(audio_bytes)
 
+    def translate_bytes_to_english(self, audio_bytes: bytes, language: str | None) -> str:
+        if self.backend_name != "faster-whisper":
+            return ""
+        if self.faster_model is None:
+            raise RuntimeError("Whisper service is not loaded.")
+
+        audio, input_sample_rate = load_audio(audio_bytes)
+        processed_audio, _, processed_duration_seconds = preprocess_audio(
+            audio=audio,
+            input_sample_rate=input_sample_rate,
+            target_sample_rate=self.sample_rate,
+            settings=self.settings,
+        )
+        if processed_audio.size == 0 or processed_duration_seconds <= 0:
+            return ""
+
+        detected_language = normalize_lang_key(language)
+        english_segments, _, _ = self._run_faster_whisper_task(
+            audio=processed_audio,
+            task="translate",
+            language=detected_language if detected_language != "und" else None,
+            processed_duration_seconds=processed_duration_seconds,
+        )
+        return merge_transcript_segments(
+            [clean_output_text(segment.text) for segment in english_segments]
+        )
+
     def _transcribe_bytes_transformers(self, audio_bytes: bytes) -> WhisperTranscriptionResult:
         if (
             self.processor is None
@@ -270,22 +297,13 @@ class WhisperService:
         if detected_language == "und":
             detected_language = infer_language_from_text(transcript)
 
-        translation_seconds = 0.0
         if detected_language in {"en", "eng"}:
             translation_english = transcript
         else:
-            english_segments, _, translation_seconds = self._run_faster_whisper_task(
-                audio=processed_audio,
-                task="translate",
-                language=detected_language if detected_language != "und" else None,
-                processed_duration_seconds=processed_duration_seconds,
-            )
-            translation_english = merge_transcript_segments(
-                [clean_output_text(segment.text) for segment in english_segments]
-            ) or transcript
+            translation_english = ""
 
         stage_timings["whisper_transcribe"] = transcribe_seconds
-        stage_timings["whisper_translate"] = translation_seconds
+        stage_timings["whisper_translate"] = 0.0
         return WhisperTranscriptionResult(
             detected_language=detected_language,
             detected_language_label=language_label(detected_language),

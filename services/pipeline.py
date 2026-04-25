@@ -71,9 +71,28 @@ class TranslationPipeline:
         lang = transcription.detected_language.lower()
 
         # ── Step 2: Determine what English text to feed OPUS ────────────
-        # Whisper's built-in translation already gives us English.
-        # If source is English the transcript and english are identical.
         english_text = transcription.translation_english
+        stage_timings = dict(transcription.stage_timings)
+        if not english_text:
+            to_english_started_at = time.perf_counter()
+            english_text = (
+                self.opus.translate_to_english(
+                    text=transcription.transcript,
+                    detected_language=lang,
+                )
+                or ""
+            )
+            stage_timings["opus_to_english"] = time.perf_counter() - to_english_started_at
+
+        if not english_text:
+            fallback_started_at = time.perf_counter()
+            english_text = self.whisper.translate_bytes_to_english(
+                audio_bytes=audio_bytes,
+                language=lang,
+            )
+            stage_timings["whisper_translate_fallback"] = (
+                time.perf_counter() - fallback_started_at
+            )
 
         # When source is JA or ID the original transcript IS that language.
         source_as_indonesian = transcription.transcript if lang in _INDONESIAN_CODES else ""
@@ -87,7 +106,6 @@ class TranslationPipeline:
             source_indonesian=source_as_indonesian,
             source_japanese=source_as_japanese,
         )
-        stage_timings = dict(transcription.stage_timings)
         stage_timings["opus"] = time.perf_counter() - opus_started_at
         total_processing_seconds = time.perf_counter() - started_at
         stage_timings["total"] = total_processing_seconds

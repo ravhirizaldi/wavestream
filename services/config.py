@@ -45,6 +45,8 @@ class Settings:
     # ── OpusMT (EN → target language) ────────────────────────────────────────
     opus_id_model_id: str   # English → Indonesian
     opus_ja_model_id: str   # English → Japanese
+    opus_id_en_model_id: str # Indonesian → English
+    opus_ja_en_model_id: str # Japanese → English
     opus_num_beams: int
     # ── TTS (Text-to-Speech) ──────────────────────────────────────────────────
     tts_en_model_id: str     # VITS MMS model for English
@@ -83,6 +85,8 @@ def load_settings() -> Settings:
         # OpusMT — Helsinki-NLP MarianMT, purpose-built NMT, ~300 MB each
         opus_id_model_id=_env_str("OPUS_ID_MODEL_ID", "Helsinki-NLP/opus-mt-en-id"),
         opus_ja_model_id=_env_str("OPUS_JA_MODEL_ID", "Helsinki-NLP/opus-mt-en-jap"),
+        opus_id_en_model_id=_env_str("OPUS_ID_EN_MODEL_ID", "Helsinki-NLP/opus-mt-id-en"),
+        opus_ja_en_model_id=_env_str("OPUS_JA_EN_MODEL_ID", "Helsinki-NLP/opus-mt-ja-en"),
         opus_num_beams=_env_int("OPUS_NUM_BEAMS", 2),
         # TTS
         # EN + ID  : Facebook MMS-TTS VITS (~130 MB each)  — fast VITS synthesis

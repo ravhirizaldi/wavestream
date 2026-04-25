@@ -589,9 +589,12 @@
         isProcessing:  false,
         micEnabled:    false,
         audioContext:  null,
+        audioInitPromise: null,
         mediaStream:   null,
         sourceNode:    null,
-        processorNode: null,
+        captureNode:   null,
+        captureMode:   null,
+        silentNode:    null,
         analyser:      null,   // AnalyserNode for real-time waveform
         waveDataArray: null,   // Uint8Array fed by AnalyserNode
         animFrameId:   null,   // requestAnimationFrame handle
@@ -637,13 +640,13 @@
 
       async function requestMic() {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(t => t.stop());
+          await ensureAudioReady();
           rememberPerm();
           closePermModal();
           setMicEnabled(true);
           setStatus('ready');
         } catch {
+          await releaseAudio();
           openPermModal('Microphone access is still blocked. Please allow it in your browser settings, then reload.');
           setMicEnabled(false);
           setStatus('err');
@@ -940,6 +943,44 @@
       }
 
       // ─── Audio utils ──────────────────────────────────────────────────────
+      async function createCaptureNode(audioContext) {
+        if (audioContext.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+          const moduleSource = `
+            class PCMCaptureProcessor extends AudioWorkletProcessor {
+              process(inputs) {
+                const input = inputs[0];
+                if (input && input[0]) {
+                  this.port.postMessage(input[0]);
+                }
+                return true;
+              }
+            }
+            registerProcessor('pcm-capture-processor', PCMCaptureProcessor);
+          `;
+          const moduleBlob = new Blob([moduleSource], { type: 'application/javascript' });
+          const moduleUrl = URL.createObjectURL(moduleBlob);
+          try {
+            await audioContext.audioWorklet.addModule(moduleUrl);
+          } finally {
+            URL.revokeObjectURL(moduleUrl);
+          }
+
+          const node = new AudioWorkletNode(audioContext, 'pcm-capture-processor');
+          node.port.onmessage = (event) => {
+            if (!state.isRecording) return;
+            state.buffers.push(new Float32Array(event.data));
+          };
+          return { node, mode: 'worklet' };
+        }
+
+        const node = audioContext.createScriptProcessor(4096, 1, 1);
+        node.onaudioprocess = (event) => {
+          if (!state.isRecording) return;
+          state.buffers.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        };
+        return { node, mode: 'script' };
+      }
+
       function mergeBuffers(bufs) {
         let len = 0; for (const b of bufs) len += b.length;
         const out = new Float32Array(len); let off = 0;
@@ -965,16 +1006,89 @@
         return new Blob([buf], { type:'audio/wav' });
       }
 
-      async function releaseAudio() {
-        // Stop waveform animation
-        if (state.animFrameId) { cancelAnimationFrame(state.animFrameId); state.animFrameId = null; }
-        if (state.analyser)    { state.analyser.disconnect(); state.analyser = null; }
-        state.waveDataArray = null;
+      async function ensureAudioReady() {
+        if (state.audioContext && state.mediaStream && state.sourceNode && state.captureNode && state.analyser) {
+          return;
+        }
+        if (state.audioInitPromise) {
+          await state.audioInitPromise;
+          return;
+        }
 
-        if (state.processorNode) { state.processorNode.disconnect(); state.processorNode.onaudioprocess=null; state.processorNode=null; }
-        if (state.sourceNode)    { state.sourceNode.disconnect(); state.sourceNode=null; }
-        if (state.mediaStream)   { state.mediaStream.getTracks().forEach(t=>t.stop()); state.mediaStream=null; }
-        if (state.audioContext)  { await state.audioContext.close(); state.audioContext=null; }
+        state.audioInitPromise = (async () => {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) {
+            throw new Error('Web Audio API unavailable');
+          }
+
+          const audioContext = state.audioContext || new AudioContextClass({ latencyHint: 'interactive' });
+          const mediaStream = state.mediaStream || await navigator.mediaDevices.getUserMedia(constraints);
+          const sourceNode = state.sourceNode || audioContext.createMediaStreamSource(mediaStream);
+
+          const analyser = state.analyser || audioContext.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.75;
+
+          const silentNode = state.silentNode || audioContext.createGain();
+          silentNode.gain.value = 0;
+
+          const capture = state.captureNode
+            ? { node: state.captureNode, mode: state.captureMode || 'script' }
+            : await createCaptureNode(audioContext);
+
+          sourceNode.connect(analyser);
+          analyser.connect(silentNode);
+          sourceNode.connect(capture.node);
+          capture.node.connect(silentNode);
+          silentNode.connect(audioContext.destination);
+
+          state.audioContext = audioContext;
+          state.mediaStream = mediaStream;
+          state.sourceNode = sourceNode;
+          state.analyser = analyser;
+          state.waveDataArray = new Uint8Array(analyser.frequencyBinCount);
+          state.captureNode = capture.node;
+          state.captureMode = capture.mode;
+          state.silentNode = silentNode;
+          state.sampleRate = audioContext.sampleRate;
+
+          if (audioContext.state === 'running') {
+            await audioContext.suspend();
+          }
+        })();
+
+        try {
+          await state.audioInitPromise;
+        } finally {
+          state.audioInitPromise = null;
+        }
+      }
+
+      async function pauseAudioSession() {
+        if (state.animFrameId) { cancelAnimationFrame(state.animFrameId); state.animFrameId = null; }
+        if (state.audioContext && state.audioContext.state === 'running') {
+          await state.audioContext.suspend();
+        }
+        if (!idleAnimId) drawIdle();
+      }
+
+      async function releaseAudio() {
+        if (state.animFrameId) { cancelAnimationFrame(state.animFrameId); state.animFrameId = null; }
+        if (idleAnimId) { cancelAnimationFrame(idleAnimId); idleAnimId = null; }
+        if (state.captureNode) {
+          if (state.captureMode === 'worklet' && state.captureNode.port) state.captureNode.port.onmessage = null;
+          if (state.captureMode === 'script') state.captureNode.onaudioprocess = null;
+          state.captureNode.disconnect();
+          state.captureNode = null;
+        }
+        if (state.analyser) { state.analyser.disconnect(); state.analyser = null; }
+        if (state.sourceNode) { state.sourceNode.disconnect(); state.sourceNode = null; }
+        if (state.silentNode) { state.silentNode.disconnect(); state.silentNode = null; }
+        if (state.mediaStream) { state.mediaStream.getTracks().forEach(t => t.stop()); state.mediaStream = null; }
+        if (state.audioContext) { await state.audioContext.close(); state.audioContext = null; }
+        state.waveDataArray = null;
+        state.audioInitPromise = null;
+        state.captureMode = null;
       }
 
       // ─── Recording ────────────────────────────────────────────────────────
@@ -988,30 +1102,13 @@
         recordTimer.classList.remove('active');
 
         try {
-          state.buffers      = [];
-          state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          state.mediaStream  = await navigator.mediaDevices.getUserMedia(constraints);
-          state.sourceNode   = state.audioContext.createMediaStreamSource(state.mediaStream);
-
-          // ── AnalyserNode for real-time waveform ──
-          state.analyser = state.audioContext.createAnalyser();
-          state.analyser.fftSize = 512;               // 256 time-domain samples
-          state.analyser.smoothingTimeConstant = 0.75; // smooth rapid amplitude changes
-          state.waveDataArray = new Uint8Array(state.analyser.frequencyBinCount);
-
-          state.processorNode = state.audioContext.createScriptProcessor(4096, 1, 1);
-          state.processorNode.onaudioprocess = (e) => {
-            if (!state.isRecording) return;
-            state.buffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-          };
-
-          // source → analyser → processor → destination
-          state.sourceNode.connect(state.analyser);
-          state.analyser.connect(state.processorNode);
-          state.processorNode.connect(state.audioContext.destination);
-
-          state.sampleRate  = state.audioContext.sampleRate;
-          state.startedAt   = performance.now();
+          state.buffers = [];
+          await ensureAudioReady();
+          if (idleAnimId) { cancelAnimationFrame(idleAnimId); idleAnimId = null; }
+          if (state.audioContext && state.audioContext.state === 'suspended') {
+            await state.audioContext.resume();
+          }
+          state.startedAt = performance.now();
           state.isRecording = true;
           setStatus('rec');
           startTimer();
@@ -1031,7 +1128,7 @@
         stopTimer();
         const captured = mergeBuffers(state.buffers);
         state.buffers = [];
-        await releaseAudio();
+        await pauseAudioSession();
         if (!captured.length) { setStatus('err'); return; }
         await submitRecording(encodeWav(captured, state.sampleRate));
       }
@@ -1140,11 +1237,15 @@
               rememberPerm();
               setMicEnabled(true);
               setStatus('ready');
+              ensureAudioReady().catch(() => {});
               // Watch for future changes (e.g. user revokes in browser settings)
               result.addEventListener('change', () => {
                 const allowed = result.state === 'granted';
                 setMicEnabled(allowed);
-                if (!allowed) setStatus('idle');
+                if (!allowed) {
+                  releaseAudio();
+                  setStatus('idle');
+                }
               });
               return;
             }
@@ -1172,6 +1273,7 @@
       }
 
       initMicState();
+      window.addEventListener('beforeunload', () => { releaseAudio(); });
     </script>
   </body>
 </html>

@@ -8,18 +8,17 @@ The current repo is an app-first deployment, not a notebook-only snapshot. The l
 
 1. Hold `Space` or press the microphone button in the browser.
 2. The browser records PCM audio and uploads a WAV file to `POST /api/translate`.
-3. Whisper produces:
-   - the original-language transcript
-   - an English translation
-4. OpusMT translates the English text into:
+3. Whisper produces the original-language transcript.
+4. OpusMT produces English from Japanese or Indonesian text, avoiding a second Whisper audio pass.
+5. OpusMT translates the English text into:
    - Indonesian
    - Japanese
-5. The UI renders all three text outputs:
+6. The UI renders all three text outputs:
    - source transcript
    - English
    - Indonesian
    - Japanese
-6. The browser can request generated speech from `POST /api/tts`.
+7. The browser can request generated speech from `POST /api/tts`.
 
 ## Models In This Codebase
 
@@ -29,9 +28,11 @@ These are the models loaded by default from [`services/config.py`](/home/ravhi/r
 
 | Purpose | Default model ID | Where used |
 | --- | --- | --- |
-| Speech-to-text + English translation | `openai/whisper-large-v3` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
+| Speech-to-text | `openai/whisper-large-v3` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
 | English -> Indonesian MT | `Helsinki-NLP/opus-mt-en-id` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Japanese MT | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Indonesian -> English MT | `Helsinki-NLP/opus-mt-id-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Japanese -> English MT | `Helsinki-NLP/opus-mt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English TTS | `facebook/mms-tts-eng` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Indonesian TTS | `facebook/mms-tts-ind` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Japanese TTS | `suno/bark-small` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
@@ -152,6 +153,8 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 
 - `OPUS_ID_MODEL_ID=Helsinki-NLP/opus-mt-en-id`
 - `OPUS_JA_MODEL_ID=Helsinki-NLP/opus-mt-en-jap`
+- `OPUS_ID_EN_MODEL_ID=Helsinki-NLP/opus-mt-id-en`
+- `OPUS_JA_EN_MODEL_ID=Helsinki-NLP/opus-mt-ja-en`
 - `OPUS_NUM_BEAMS=2`
 
 ### TTS
@@ -184,6 +187,8 @@ These are practical deployment requirements for the current default stack in thi
 - `openai/whisper-large-v3`
 - `Helsinki-NLP/opus-mt-en-id`
 - `Helsinki-NLP/opus-mt-en-jap`
+- `Helsinki-NLP/opus-mt-id-en`
+- `Helsinki-NLP/opus-mt-ja-en`
 - `facebook/mms-tts-eng`
 - `facebook/mms-tts-ind`
 - `suno/bark-small`
@@ -207,7 +212,7 @@ This tier is the practical floor for the shipped defaults. It may still feel tig
 - System RAM: `24-32 GB`
 - Disk: `40 GB+` free SSD space
 
-This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with the default Whisper, dual OpusMT models, and multilingual TTS loaded together.
+This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with the default Whisper, four OpusMT models, and multilingual TTS loaded together.
 
 ### Low-spec or fallback mode
 
@@ -220,7 +225,7 @@ This is the safer target for smoother startup, fewer memory-pressure issues, and
 ### Provisioning notes
 
 - The Japanese TTS path is the heaviest extra TTS load in the default setup because it uses `suno/bark-small`.
-- The two OpusMT models and two MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
+- The four OpusMT models and two MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
 - Use SSD-backed storage. First boot can be much slower if the model cache has to be downloaded into a cold environment.
 - Match your PyTorch install to the CUDA version on the machine or RunPod image before starting the service.
 

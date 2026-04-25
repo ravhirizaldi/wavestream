@@ -38,6 +38,14 @@ class OpusMTService:
         self._ja_tokenizer: MarianTokenizer | None = None
         self._ja_model: MarianMTModel | None = None
 
+        # Indonesian → English
+        self._id_en_tokenizer: MarianTokenizer | None = None
+        self._id_en_model: MarianMTModel | None = None
+
+        # Japanese → English
+        self._ja_en_tokenizer: MarianTokenizer | None = None
+        self._ja_en_model: MarianMTModel | None = None
+
     # ─────────────────────────────────────────────────────────────────────────
     # Lifecycle
     # ─────────────────────────────────────────────────────────────────────────
@@ -51,6 +59,12 @@ class OpusMTService:
         )
         self._ja_tokenizer, self._ja_model = self._load_model(
             self.settings.opus_ja_model_id
+        )
+        self._id_en_tokenizer, self._id_en_model = self._load_model(
+            self.settings.opus_id_en_model_id
+        )
+        self._ja_en_tokenizer, self._ja_en_model = self._load_model(
+            self.settings.opus_ja_en_model_id
         )
 
     def _load_model(
@@ -140,6 +154,16 @@ class OpusMTService:
                 japanese = futures["ja"].result()
 
         return OpusTranslationResult(indonesian=indonesian, japanese=japanese)
+
+    def translate_to_english(self, text: str, detected_language: str) -> str | None:
+        lang = (detected_language or "").lower()
+        if lang in ("en", "eng"):
+            return text
+        if lang in ("id", "ind"):
+            return self._translate_text(text, self._id_en_tokenizer, self._id_en_model)
+        if lang in ("ja", "jpn"):
+            return self._translate_text(text, self._ja_en_tokenizer, self._ja_en_model)
+        return None
 
     # ─────────────────────────────────────────────────────────────────────────
     # Internal

@@ -41,6 +41,8 @@ def _log_startup(current_settings: Settings, pipeline: TranslationPipeline) -> N
     print(f"Whisper concur.   : {current_settings.whisper_concurrency}")
     print(f"OpusMT EN→ID     : {current_settings.opus_id_model_id}")
     print(f"OpusMT EN→JA     : {current_settings.opus_ja_model_id}")
+    print(f"OpusMT ID→EN     : {current_settings.opus_id_en_model_id}")
+    print(f"OpusMT JA→EN     : {current_settings.opus_ja_en_model_id}")
     print(f"Opus beams        : {current_settings.opus_num_beams}")
     print(f"TTS EN            : {current_settings.tts_en_model_id}")
     print(f"TTS JA            : {current_settings.tts_ja_model_id}  voice={current_settings.tts_ja_voice}")
