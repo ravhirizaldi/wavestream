@@ -61,7 +61,10 @@ async def lifespan(app: FastAPI):
     app.state.pipeline = pipeline
     app.state.tts      = tts
     _log_startup(settings, pipeline)
-    yield
+    try:
+        yield
+    finally:
+        pipeline.opus.shutdown()
 
 
 app = FastAPI(title="RunPod PTT Translation App", lifespan=lifespan)

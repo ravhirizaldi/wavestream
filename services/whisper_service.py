@@ -56,6 +56,8 @@ class WhisperService:
         self.model: WhisperForConditionalGeneration | None = None
         self.faster_model = None
         self.sample_rate = 16000
+        self._transcribe_generation_config = None
+        self._translate_generation_config = None
         self._semaphore = threading.BoundedSemaphore(
             max(1, self.settings.whisper_concurrency)
         )
@@ -94,6 +96,10 @@ class WhisperService:
             getattr(self.processor.feature_extractor, "sampling_rate", 16000)
         )
         self.runtime_compute_type = str(self.torch_dtype).replace("torch.", "")
+        # Cache generation configs once so we don't deepcopy + mutate them
+        # per request.
+        self._transcribe_generation_config = self._generation_config(task="transcribe")
+        self._translate_generation_config = self._generation_config(task="translate")
 
     def transcribe_bytes(self, audio_bytes: bytes) -> WhisperTranscriptionResult:
         if self.backend_name == "faster-whisper":
@@ -165,8 +171,12 @@ class WhisperService:
         english_chunks: list[str] = []
         detected_languages: list[str] = []
 
-        transcribe_config = self._generation_config(task="transcribe")
-        translate_config = self._generation_config(task="translate")
+        transcribe_config = self._transcribe_generation_config or self._generation_config(
+            task="transcribe"
+        )
+        translate_config = self._translate_generation_config or self._generation_config(
+            task="translate"
+        )
         whisper_transcribe_seconds = 0.0
         whisper_translate_seconds = 0.0
 
@@ -206,15 +216,6 @@ class WhisperService:
                 )
                 whisper_transcribe_seconds += time.perf_counter() - transcribe_started_at
 
-                # ── Decoder pass 2: built-in translation → English ───────────
-                translate_started_at = time.perf_counter()
-                gen_translate = self.model.generate(
-                    encoder_outputs=encoder_outputs,
-                    attention_mask=attention_mask,
-                    generation_config=translate_config,
-                )
-                whisper_translate_seconds += time.perf_counter() - translate_started_at
-
             # Language detection from the decoded string (with special tokens).
             # Newer transformers may not include forced prefix tokens in the
             # generated token IDs, so we decode the raw output and regex-match
@@ -225,12 +226,28 @@ class WhisperService:
             transcript_text = clean_output_text(
                 self.processor.batch_decode(gen_transcribe, skip_special_tokens=True)[0]
             )
-            detected_languages.append(
-                detect_language_with_fallback(raw_with_special, transcript_text)
+            chunk_language = detect_language_with_fallback(
+                raw_with_special, transcript_text
             )
-            english_text = clean_output_text(
-                self.processor.batch_decode(gen_translate, skip_special_tokens=True)[0]
-            )
+            detected_languages.append(chunk_language)
+
+            # Skip the translate decoder pass when source is already English —
+            # it would just reproduce the transcript at full decoder cost.
+            if chunk_language in {"en", "eng"}:
+                english_text = transcript_text
+            else:
+                with torch.inference_mode():
+                    translate_started_at = time.perf_counter()
+                    gen_translate = self.model.generate(
+                        encoder_outputs=encoder_outputs,
+                        attention_mask=attention_mask,
+                        generation_config=translate_config,
+                    )
+                    whisper_translate_seconds += time.perf_counter() - translate_started_at
+
+                english_text = clean_output_text(
+                    self.processor.batch_decode(gen_translate, skip_special_tokens=True)[0]
+                )
 
             if transcript_text:
                 transcript_chunks.append(transcript_text)
@@ -353,9 +370,10 @@ class WhisperService:
             processed_duration_seconds
             <= self.settings.whisper_short_audio_threshold_seconds
         )
+        beam_size = max(1, self.settings.whisper_num_beams)
         kwargs: dict[str, object] = {
             "task": task,
-            "beam_size": max(1, self.settings.whisper_num_beams),
+            "beam_size": beam_size,
             "best_of": 1,
             "condition_on_previous_text": (
                 False
@@ -364,6 +382,11 @@ class WhisperService:
             ),
             "without_timestamps": True,
             "vad_filter": self.settings.whisper_vad_filter and not is_short_audio,
+            # Pin hallucination guards explicitly so future faster-whisper
+            # version bumps don't silently change behaviour.
+            "compression_ratio_threshold": self.settings.whisper_compression_ratio_threshold,
+            "log_prob_threshold": self.settings.whisper_log_prob_threshold,
+            "no_speech_threshold": self.settings.whisper_no_speech_threshold,
         }
         if not is_short_audio:
             kwargs["chunk_length"] = max(

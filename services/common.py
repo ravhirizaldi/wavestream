@@ -123,6 +123,13 @@ def normalized_words(text: str) -> list[str]:
     return [match.group(0).lower() for match in WORD_PATTERN.finditer(text)]
 
 
+_OVERLAP_NORMALIZE_PATTERN = re.compile(r"[^\w]+", flags=re.UNICODE)
+
+
+def _normalize_for_overlap(word: str) -> str:
+    return _OVERLAP_NORMALIZE_PATTERN.sub("", word).lower()
+
+
 def merge_transcript_segments(segments: list[str]) -> str:
     merged: list[str] = []
     for segment in segments:
@@ -136,10 +143,17 @@ def merge_transcript_segments(segments: list[str]) -> str:
         current_words = cleaned.split()
         overlap_size = 0
         max_overlap = min(16, len(previous_words), len(current_words))
+        # Punctuation/casing-insensitive comparison so chunks like
+        # "...hello," and "hello world" still detect the overlap.
+        previous_norm = [_normalize_for_overlap(word) for word in previous_words]
+        current_norm = [_normalize_for_overlap(word) for word in current_words]
         for candidate in range(max_overlap, 0, -1):
-            left = [word.lower() for word in previous_words[-candidate:]]
-            right = [word.lower() for word in current_words[:candidate]]
-            if left == right:
+            left = previous_norm[-candidate:]
+            right = current_norm[:candidate]
+            # Skip overlaps composed entirely of dropped tokens (pure
+            # punctuation chunks) — they would always match and falsely
+            # eat real content.
+            if any(left) and left == right:
                 overlap_size = candidate
                 break
         if overlap_size:
