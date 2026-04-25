@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -8,6 +9,8 @@ from transformers import MarianMTModel, MarianTokenizer
 
 from services.common import clean_output_text, detect_device
 from services.config import Settings
+
+_PUNCTUATION_ONLY_PATTERN = re.compile(r"^[\W_]+$", flags=re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,15 @@ class OpusMTService:
         # Japanese → English
         self._ja_en_tokenizer: MarianTokenizer | None = None
         self._ja_en_model: MarianMTModel | None = None
+
+        # Persistent worker pool — avoids spinning up two threads per request.
+        # max_workers=2 because at most we run EN→ID and EN→JA in parallel.
+        self._executor = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="opus-mt"
+        )
+
+    def shutdown(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Lifecycle
@@ -131,27 +143,26 @@ class OpusMTService:
         if not need_id and not need_ja:
             return OpusTranslationResult(indonesian=indonesian, japanese=japanese)
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures: dict = {}
-            if need_id:
-                futures["id"] = pool.submit(
-                    self._translate_text,
-                    english_text,
-                    self._id_tokenizer,
-                    self._id_model,
-                )
-            if need_ja:
-                futures["ja"] = pool.submit(
-                    self._translate_text,
-                    english_text,
-                    self._ja_tokenizer,
-                    self._ja_model,
-                )
+        futures: dict = {}
+        if need_id:
+            futures["id"] = self._executor.submit(
+                self._translate_text,
+                english_text,
+                self._id_tokenizer,
+                self._id_model,
+            )
+        if need_ja:
+            futures["ja"] = self._executor.submit(
+                self._translate_text,
+                english_text,
+                self._ja_tokenizer,
+                self._ja_model,
+            )
 
-            if "id" in futures:
-                indonesian = futures["id"].result()
-            if "ja" in futures:
-                japanese = futures["ja"].result()
+        if "id" in futures:
+            indonesian = futures["id"].result()
+        if "ja" in futures:
+            japanese = futures["ja"].result()
 
         return OpusTranslationResult(indonesian=indonesian, japanese=japanese)
 
@@ -175,26 +186,41 @@ class OpusMTService:
         tokenizer: MarianTokenizer | None,
         model: MarianMTModel | None,
     ) -> str:
-        if not text or not text.strip():
+        if not text:
+            return ""
+        cleaned = text.strip()
+        if not cleaned or _PUNCTUATION_ONLY_PATTERN.match(cleaned):
+            # Marian readily hallucinates a translation for punctuation-only
+            # input (e.g. "..." → "Tidak."). Bail early.
             return ""
         if tokenizer is None or model is None or self.device is None:
             raise RuntimeError("OpusMT model not loaded.")
 
+        # padding=True on a single string is a no-op; skip it to avoid
+        # tokenizer overhead per request.
         inputs = tokenizer(
-            text,
+            cleaned,
             return_tensors="pt",
-            padding=True,
             truncation=True,
             max_length=512,
         )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        inputs = {k: v.to(self.device, non_blocking=True) for k, v in inputs.items()}
+
+        num_beams = max(1, self.settings.opus_num_beams)
+        generate_kwargs: dict[str, object] = {
+            "num_beams": num_beams,
+            "max_new_tokens": max(16, self.settings.opus_max_new_tokens),
+            "length_penalty": self.settings.opus_length_penalty,
+            # Stop the moment all beams hit EOS — major win when output is
+            # much shorter than max_new_tokens.
+            "early_stopping": num_beams > 1,
+        }
+        no_repeat = self.settings.opus_no_repeat_ngram_size
+        if no_repeat and no_repeat > 0:
+            generate_kwargs["no_repeat_ngram_size"] = no_repeat
 
         with torch.inference_mode():
-            tokens = model.generate(
-                **inputs,
-                num_beams=self.settings.opus_num_beams,
-                max_length=512,
-            )
+            tokens = model.generate(**inputs, **generate_kwargs)
 
         raw = tokenizer.batch_decode(tokens, skip_special_tokens=True)[0]
         return clean_output_text(raw)

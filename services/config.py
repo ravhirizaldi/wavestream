@@ -42,12 +42,18 @@ class Settings:
     whisper_condition_on_previous_text: bool
     whisper_vad_filter: bool
     whisper_vad_min_silence_ms: int
+    whisper_compression_ratio_threshold: float
+    whisper_log_prob_threshold: float
+    whisper_no_speech_threshold: float
     # ── OpusMT (EN → target language) ────────────────────────────────────────
     opus_id_model_id: str   # English → Indonesian
     opus_ja_model_id: str   # English → Japanese
     opus_id_en_model_id: str # Indonesian → English
     opus_ja_en_model_id: str # Japanese → English
     opus_num_beams: int
+    opus_max_new_tokens: int
+    opus_no_repeat_ngram_size: int
+    opus_length_penalty: float
     # ── TTS (Text-to-Speech) ──────────────────────────────────────────────────
     tts_en_model_id: str     # VITS MMS model for English
     tts_ja_model_id: str     # Bark model for Japanese (multilingual)
@@ -62,6 +68,7 @@ class Settings:
     chunk_overlap_seconds: float
     trim_silence: bool
     silence_threshold_ratio: float
+    silence_threshold_floor: float
     silence_padding_ms: int
     normalize_audio: bool
 
@@ -74,20 +81,26 @@ def load_settings() -> Settings:
         whisper_backend=_env_str("WHISPER_BACKEND", "faster-whisper"),
         whisper_model_id=_env_str("WHISPER_MODEL_ID", "openai/whisper-large-v3"),
         whisper_compute_type=_env_str("WHISPER_COMPUTE_TYPE", "auto"),
-        whisper_num_beams=_env_int("WHISPER_NUM_BEAMS", 1),
+        whisper_num_beams=_env_int("WHISPER_NUM_BEAMS", 5),
         whisper_cpu_threads=_env_int("WHISPER_CPU_THREADS", 4),
         whisper_concurrency=_env_int("WHISPER_CONCURRENCY", 2),
         whisper_chunk_length_seconds=_env_int("WHISPER_CHUNK_LENGTH_SECONDS", 12),
         whisper_short_audio_threshold_seconds=_env_float("WHISPER_SHORT_AUDIO_THRESHOLD_SECONDS", 12.0),
         whisper_condition_on_previous_text=_env_bool("WHISPER_CONDITION_ON_PREVIOUS_TEXT", False),
-        whisper_vad_filter=_env_bool("WHISPER_VAD_FILTER", False),
+        whisper_vad_filter=_env_bool("WHISPER_VAD_FILTER", True),
         whisper_vad_min_silence_ms=_env_int("WHISPER_VAD_MIN_SILENCE_MS", 350),
+        whisper_compression_ratio_threshold=_env_float("WHISPER_COMPRESSION_RATIO_THRESHOLD", 2.4),
+        whisper_log_prob_threshold=_env_float("WHISPER_LOG_PROB_THRESHOLD", -1.0),
+        whisper_no_speech_threshold=_env_float("WHISPER_NO_SPEECH_THRESHOLD", 0.6),
         # OpusMT — Helsinki-NLP MarianMT, purpose-built NMT, ~300 MB each
         opus_id_model_id=_env_str("OPUS_ID_MODEL_ID", "Helsinki-NLP/opus-mt-en-id"),
         opus_ja_model_id=_env_str("OPUS_JA_MODEL_ID", "Helsinki-NLP/opus-mt-en-jap"),
         opus_id_en_model_id=_env_str("OPUS_ID_EN_MODEL_ID", "Helsinki-NLP/opus-mt-id-en"),
         opus_ja_en_model_id=_env_str("OPUS_JA_EN_MODEL_ID", "Helsinki-NLP/opus-mt-ja-en"),
-        opus_num_beams=_env_int("OPUS_NUM_BEAMS", 2),
+        opus_num_beams=_env_int("OPUS_NUM_BEAMS", 5),
+        opus_max_new_tokens=_env_int("OPUS_MAX_NEW_TOKENS", 384),
+        opus_no_repeat_ngram_size=_env_int("OPUS_NO_REPEAT_NGRAM_SIZE", 3),
+        opus_length_penalty=_env_float("OPUS_LENGTH_PENALTY", 1.0),
         # TTS
         # EN + ID  : Facebook MMS-TTS VITS (~130 MB each)  — fast VITS synthesis
         # JA       : Suno Bark small (~1.5 GB)             — multilingual autoregressive
@@ -103,7 +116,8 @@ def load_settings() -> Settings:
         chunk_seconds=_env_float("CHUNK_SECONDS", 15.0),
         chunk_overlap_seconds=_env_float("CHUNK_OVERLAP_SECONDS", 0.75),
         trim_silence=_env_bool("TRIM_SILENCE", True),
-        silence_threshold_ratio=_env_float("SILENCE_THRESHOLD_RATIO", 0.02),
+        silence_threshold_ratio=_env_float("SILENCE_THRESHOLD_RATIO", 0.01),
+        silence_threshold_floor=_env_float("SILENCE_THRESHOLD_FLOOR", 0.0015),
         silence_padding_ms=_env_int("SILENCE_PADDING_MS", 180),
         normalize_audio=_env_bool("NORMALIZE_AUDIO", True),
     )
