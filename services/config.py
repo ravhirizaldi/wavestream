@@ -60,6 +60,7 @@ class Settings:
     tts_ja_voice: str        # Bark voice preset, e.g. v2/ja_speaker_0
     tts_id_model_id: str     # VITS MMS model for Indonesian
     tts_speaking_rate: float # 1.0 = normal, 0.9 = slower, 1.1 = faster
+    tts_preload_languages: str  # comma-separated, e.g. "en,id" — others lazy-loaded
     # ── Shared ────────────────────────────────────────────────────────────
     hf_token: str | None
     preferred_device: str | None
@@ -109,6 +110,10 @@ def load_settings() -> Settings:
         tts_ja_voice=_env_str("TTS_JA_VOICE",       "v2/ja_speaker_0"),
         tts_id_model_id=_env_str("TTS_ID_MODEL_ID", "facebook/mms-tts-ind"),
         tts_speaking_rate=_env_float("TTS_SPEAKING_RATE", 1.0),
+        # Languages whose TTS backend should be eager-loaded at startup.
+        # Anything not listed here is loaded lazily on first synth request.
+        # Default skips "ja" because Bark (~1.5 GB) dominates startup time.
+        tts_preload_languages=_env_str("TTS_PRELOAD_LANGUAGES", "en,id"),
         # Shared
         hf_token=os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN"),
         preferred_device=os.getenv("MODEL_DEVICE"),
