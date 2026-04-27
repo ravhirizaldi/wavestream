@@ -32,7 +32,7 @@ These are the models loaded by default from [`services/config.py`](/home/ravhi/r
 | English -> Indonesian MT | `Helsinki-NLP/opus-mt-en-id` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Japanese MT | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Indonesian -> English MT | `Helsinki-NLP/opus-mt-id-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| Japanese -> English MT | `Helsinki-NLP/opus-mt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Japanese -> English MT | `staka/fugumt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English TTS | `facebook/mms-tts-eng` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Indonesian TTS | `facebook/mms-tts-ind` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Japanese TTS | `suno/bark-small` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
@@ -148,8 +148,8 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `WHISPER_CONDITION_ON_PREVIOUS_TEXT=false`
 - `WHISPER_VAD_FILTER=true`
 - `WHISPER_VAD_MIN_SILENCE_MS=350`
-- `WHISPER_COMPRESSION_RATIO_THRESHOLD=2.4`
-- `WHISPER_LOG_PROB_THRESHOLD=-1.0`
+- `WHISPER_COMPRESSION_RATIO_THRESHOLD=2.2`
+- `WHISPER_LOG_PROB_THRESHOLD=-0.8`
 - `WHISPER_NO_SPEECH_THRESHOLD=0.6`
 
 ### OpusMT
@@ -157,8 +157,8 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `OPUS_ID_MODEL_ID=Helsinki-NLP/opus-mt-en-id`
 - `OPUS_JA_MODEL_ID=Helsinki-NLP/opus-mt-en-jap`
 - `OPUS_ID_EN_MODEL_ID=Helsinki-NLP/opus-mt-id-en`
-- `OPUS_JA_EN_MODEL_ID=Helsinki-NLP/opus-mt-ja-en`
-- `OPUS_NUM_BEAMS=5`
+- `OPUS_JA_EN_MODEL_ID=staka/fugumt-ja-en` (FuGuMT, drop-in MarianMT replacement — dramatically more faithful than `Helsinki-NLP/opus-mt-ja-en` on conversational JA)
+- `OPUS_NUM_BEAMS=2` (FuGuMT-ja-en is most faithful at low beams; Helsinki-NLP models in the other directions are insensitive to 2 vs 5)
 - `OPUS_MAX_NEW_TOKENS=384`
 - `OPUS_NO_REPEAT_NGRAM_SIZE=3`
 - `OPUS_LENGTH_PENALTY=1.0`
@@ -195,7 +195,7 @@ These are practical deployment requirements for the current default stack in thi
 - `Helsinki-NLP/opus-mt-en-id`
 - `Helsinki-NLP/opus-mt-en-jap`
 - `Helsinki-NLP/opus-mt-id-en`
-- `Helsinki-NLP/opus-mt-ja-en`
+- `staka/fugumt-ja-en`
 - `facebook/mms-tts-eng`
 - `facebook/mms-tts-ind`
 - `suno/bark-small`
