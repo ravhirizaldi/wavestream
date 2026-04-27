@@ -10,6 +10,7 @@ ENV/
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 .ipynb_checkpoints/
 
@@ -26,3 +27,6 @@ htmlcov/
 Thumbs.db
 
 .codex
+
+# Background-runner state written by `start.sh -d`
+.run/
