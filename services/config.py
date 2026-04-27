@@ -90,15 +90,27 @@ def load_settings() -> Settings:
         whisper_condition_on_previous_text=_env_bool("WHISPER_CONDITION_ON_PREVIOUS_TEXT", False),
         whisper_vad_filter=_env_bool("WHISPER_VAD_FILTER", True),
         whisper_vad_min_silence_ms=_env_int("WHISPER_VAD_MIN_SILENCE_MS", 350),
-        whisper_compression_ratio_threshold=_env_float("WHISPER_COMPRESSION_RATIO_THRESHOLD", 2.4),
-        whisper_log_prob_threshold=_env_float("WHISPER_LOG_PROB_THRESHOLD", -1.0),
+        # Tightened defaults relative to faster-whisper stock (2.4 / -1.0):
+        # we'd rather drop a hallucinated chunk and re-emit silence than ship
+        # a confidently-wrong English translation downstream.
+        whisper_compression_ratio_threshold=_env_float("WHISPER_COMPRESSION_RATIO_THRESHOLD", 2.2),
+        whisper_log_prob_threshold=_env_float("WHISPER_LOG_PROB_THRESHOLD", -0.8),
         whisper_no_speech_threshold=_env_float("WHISPER_NO_SPEECH_THRESHOLD", 0.6),
         # OpusMT — Helsinki-NLP MarianMT, purpose-built NMT, ~300 MB each
         opus_id_model_id=_env_str("OPUS_ID_MODEL_ID", "Helsinki-NLP/opus-mt-en-id"),
         opus_ja_model_id=_env_str("OPUS_JA_MODEL_ID", "Helsinki-NLP/opus-mt-en-jap"),
         opus_id_en_model_id=_env_str("OPUS_ID_EN_MODEL_ID", "Helsinki-NLP/opus-mt-id-en"),
-        opus_ja_en_model_id=_env_str("OPUS_JA_EN_MODEL_ID", "Helsinki-NLP/opus-mt-ja-en"),
-        opus_num_beams=_env_int("OPUS_NUM_BEAMS", 5),
+        # FuGuMT (Marian-NMT, ~280 MB) is dramatically more faithful than
+        # Helsinki-NLP/opus-mt-ja-en on conversational Japanese with
+        # hesitations / repetitions, where the legacy model collapses into
+        # unrelated stock English ("I'm from the United States, ...").
+        opus_ja_en_model_id=_env_str("OPUS_JA_EN_MODEL_ID", "staka/fugumt-ja-en"),
+        # FuGuMT-ja-en is most faithful at low beams (1-3) and degenerates at
+        # beams >= 5 ("Aocke-Japhanese ... populto-popultoer ..."). Helsinki-NLP
+        # models in the other directions are insensitive to this range, so 2
+        # is the globally safe default. Bump per-deployment via the env var
+        # only if you've A/B tested for your direction mix.
+        opus_num_beams=_env_int("OPUS_NUM_BEAMS", 2),
         opus_max_new_tokens=_env_int("OPUS_MAX_NEW_TOKENS", 384),
         opus_no_repeat_ngram_size=_env_int("OPUS_NO_REPEAT_NGRAM_SIZE", 3),
         opus_length_penalty=_env_float("OPUS_LENGTH_PENALTY", 1.0),
