@@ -7,7 +7,12 @@ from dataclasses import dataclass
 import torch
 from transformers import MarianMTModel, MarianTokenizer
 
-from services.common import clean_output_text, detect_device
+from services.common import (
+    clean_output_text,
+    clear_max_length_default,
+    detect_device,
+    silence_transformers_max_length_warning,
+)
 from services.config import Settings
 
 _PUNCTUATION_ONLY_PATTERN = re.compile(r"^[\W_]+$", flags=re.UNICODE)
@@ -63,6 +68,7 @@ class OpusMTService:
     # ─────────────────────────────────────────────────────────────────────────
 
     def load(self) -> None:
+        silence_transformers_max_length_warning()
         self.device, _ = detect_device(
             self.settings.preferred_device, self.settings.preferred_dtype
         )
@@ -106,6 +112,11 @@ class OpusMTService:
         model_dtype = torch.float16 if self.device and self.device.type == "cuda" else torch.float32
         model = model.to(dtype=model_dtype, device=self.device)
         model.eval()
+        # Marian's default generation_config carries max_length=512. Clearing
+        # it here makes the explicit max_new_tokens we pass at call time the
+        # sole length signal, suppressing the noisy
+        # `Both max_new_tokens and max_length seem to have been set` log line.
+        clear_max_length_default(getattr(model, "generation_config", None))
         return tokenizer, model
 
     # ─────────────────────────────────────────────────────────────────────────

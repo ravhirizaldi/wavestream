@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import Counter
 
@@ -68,6 +69,68 @@ INDONESIAN_HINT_WORDS = frozenset({
     "hal", "halo", "ini", "itu", "jepang", "kami", "kamu", "saya", "selamat",
     "tentang", "terima", "untuk", "yang",
 })
+
+
+class _DropMaxNewTokensVsMaxLengthWarning(logging.Filter):
+    """
+    Drop the ``Both `max_new_tokens` (=…) and `max_length`(=…) seem to have
+    been set`` log line that ``transformers`` emits whenever a model's
+    ``generation_config.max_length`` is left at its default while we pass
+    ``max_new_tokens`` explicitly.
+
+    The warning is harmless (max_new_tokens always wins), but it spams the
+    log on every translation request and on every Bark sub-stage call.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        msg = record.getMessage()
+        return not ("max_new_tokens" in msg and "max_length" in msg)
+
+
+_TRANSFORMERS_LOGGER_NAMES = (
+    "transformers",
+    "transformers.generation",
+    "transformers.generation.utils",
+    "transformers.generation.configuration_utils",
+)
+_max_len_filter_installed = False
+
+
+def silence_transformers_max_length_warning() -> None:
+    """Idempotently install a logging filter that hides the spammy
+    ``max_new_tokens vs max_length`` notice on the ``transformers`` logger.
+
+    This is a belt-and-braces guard: the actual fix is clearing
+    ``model.generation_config.max_length`` on each model we load. The filter
+    just keeps logs clean if a future transformers release fires the same
+    message from a code path we haven't patched yet.
+    """
+    global _max_len_filter_installed
+    if _max_len_filter_installed:
+        return
+    flt = _DropMaxNewTokensVsMaxLengthWarning()
+    for name in _TRANSFORMERS_LOGGER_NAMES:
+        logging.getLogger(name).addFilter(flt)
+    _max_len_filter_installed = True
+
+
+def clear_max_length_default(generation_config: object | None) -> None:
+    """Clear ``max_length`` and ``max_new_tokens`` on a ``GenerationConfig``
+    so the explicit kwargs we pass to ``.generate(...)`` are the only source
+    of truth, suppressing the ``Both max_new_tokens and max_length seem to
+    have been set`` warning at its root.
+
+    Safe to call on objects that lack the attribute (no-op).
+    """
+    if generation_config is None:
+        return
+    for attr in ("max_length", "max_new_tokens"):
+        if hasattr(generation_config, attr):
+            try:
+                setattr(generation_config, attr, None)
+            except (AttributeError, TypeError):
+                # Some configs are frozen / use slots — skip silently.
+                pass
 
 
 def detect_device(preferred_device: str | None = None, preferred_dtype: str | None = None) -> tuple[torch.device, torch.dtype]:

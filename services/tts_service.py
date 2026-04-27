@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import io
 import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 import soundfile as sf
 import torch
 from transformers import AutoProcessor, AutoTokenizer, BarkModel, VitsModel
 
-from services.common import detect_device
+from services.common import (
+    clear_max_length_default,
+    detect_device,
+    silence_transformers_max_length_warning,
+)
 from services.config import Settings
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -125,6 +131,18 @@ class _BarkBackend(_Backend):
         self.device        = device
         self.default_voice = default_voice
 
+        # Bark's multi-stage generation passes max_new_tokens to each
+        # sub-model whose generation_config still has max_length=20 baked in,
+        # which trips the "Both max_new_tokens and max_length seem to have
+        # been set" log line on every synth. Clearing max_length on each
+        # sub-model (and on the wrapper itself) suppresses it at the source.
+        for attr in ("generation_config",):
+            clear_max_length_default(getattr(self.model, attr, None))
+        for sub_name in ("semantic", "coarse_acoustics", "fine_acoustics", "codec_model"):
+            sub = getattr(self.model, sub_name, None)
+            if sub is not None:
+                clear_max_length_default(getattr(sub, "generation_config", None))
+
     def synthesize(self, text: str, voice: str | None = None, **_) -> tuple[np.ndarray, int]:  # type: ignore[override]
         import warnings
 
@@ -132,14 +150,17 @@ class _BarkBackend(_Backend):
         inputs  = self.processor(text, voice_preset=voice)
         inputs  = {k: v.to(self.device) for k, v in inputs.items()}
 
-        # Bark's multi-stage generation triggers several known harmless warnings
-        # from the transformers library. Suppress them to keep logs clean.
+        # Bark's multi-stage generation triggers several known-harmless
+        # python warnings from the transformers library. Suppress them to
+        # keep logs clean. (The "Both max_new_tokens and max_length" notice
+        # is emitted via the logger, not via warnings — that one is handled
+        # by clearing generation_config.max_length at load time and by the
+        # logging filter installed in services.common.)
         _bark_warning_patterns = [
             "A custom logits processor",
             "Passing `generation_config` together",
             "The attention mask and the pad token id",
             "The attention mask is not set",
-            "Both `max_new_tokens`",
         ]
         with torch.inference_mode():
             with warnings.catch_warnings():
@@ -177,40 +198,82 @@ class TTSService:
         self.settings = settings
         self.device:   torch.device | None = None
         self._backends: dict[str, _Backend] = {}
-        self._lock     = threading.Lock()
+        self._factories: dict[str, Callable[[], _Backend]] = {}
+        self._load_locks: dict[str, threading.Lock] = {}
+        self._synth_lock = threading.Lock()
 
     # ──────────────────────────────────────────────────────────────────────────
     def load(self) -> None:
+        silence_transformers_max_length_warning()
         self.device, _ = detect_device(
             self.settings.preferred_device,
             self.settings.preferred_dtype,
         )
 
-        # ── VITS models ────────────────────────────────────
-        for lang, model_id in (
-            ("en", self.settings.tts_en_model_id),
-            ("id", self.settings.tts_id_model_id),
-        ):
-            self._backends[lang] = _VitsBackend(model_id, self.settings.hf_token, self.device)
+        # Register factories for every supported language. Backends are
+        # instantiated either eagerly here (if listed in TTS_PRELOAD_LANGUAGES)
+        # or lazily on first synth request — Bark (~1.5 GB) is the slow one,
+        # so by default it's left cold so server startup stays snappy.
+        device = self.device
+        hf_token = self.settings.hf_token
+        self._factories = {
+            "en": lambda: _VitsBackend(self.settings.tts_en_model_id, hf_token, device),
+            "id": lambda: _VitsBackend(self.settings.tts_id_model_id, hf_token, device),
+            "ja": lambda: _BarkBackend(
+                model_id      = self.settings.tts_ja_model_id,
+                hf_token      = hf_token,
+                device        = device,
+                default_voice = self.settings.tts_ja_voice,
+            ),
+        }
+        for lang in self._factories:
+            self._load_locks[lang] = threading.Lock()
 
-        # ── Bark model for Japanese ────────────────────────
-        self._backends["ja"] = _BarkBackend(
-            model_id      = self.settings.tts_ja_model_id,
-            hf_token      = self.settings.hf_token,
-            device        = self.device,
-            default_voice = self.settings.tts_ja_voice,
-        )
+        preload = {
+            _LANG_ALIASES.get(s.strip().lower(), s.strip().lower())
+            for s in self.settings.tts_preload_languages.split(",")
+            if s.strip()
+        }
+        for lang in preload:
+            if lang in self._factories:
+                self._ensure_backend(lang)
+            else:
+                print(f"[TTS] Ignoring unknown language in TTS_PRELOAD_LANGUAGES: {lang!r}")
+        lazy_langs = sorted(set(self._factories) - set(self._backends))
+        if lazy_langs:
+            print(f"[TTS] Lazy-loading on first request: {', '.join(lazy_langs)}")
+
+    def _ensure_backend(self, lang: str) -> _Backend | None:
+        cached = self._backends.get(lang)
+        if cached is not None:
+            return cached
+        factory = self._factories.get(lang)
+        if factory is None:
+            return None
+        lock = self._load_locks.setdefault(lang, threading.Lock())
+        with lock:
+            cached = self._backends.get(lang)
+            if cached is not None:
+                return cached
+            t0 = time.perf_counter()
+            print(f"[TTS] Lazy-loading backend for lang={lang}…")
+            backend = factory()
+            self._backends[lang] = backend
+            print(f"[TTS] Loaded {lang} backend in {time.perf_counter() - t0:.2f}s")
+            return backend
 
     # ──────────────────────────────────────────────────────────────────────────
     def synthesize(self, text: str, language: str) -> TTSResult:
         lang    = _LANG_ALIASES.get(language.lower().strip(), _DEFAULT_LANG)
-        backend = self._backends.get(lang) or self._backends[_DEFAULT_LANG]
+        backend = self._ensure_backend(lang) or self._ensure_backend(_DEFAULT_LANG)
+        if backend is None:
+            raise RuntimeError("TTSService.load() was not called or no backends are available.")
 
         if not text or not text.strip():
             silence = np.zeros(int(16_000 * 0.15), dtype=np.float32)
             return _encode(silence, 16_000, lang)
 
-        with self._lock:
+        with self._synth_lock:
             if isinstance(backend, _BarkBackend):
                 audio, sr = backend.synthesize(text, voice=self.settings.tts_ja_voice)
             else:
