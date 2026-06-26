@@ -219,8 +219,8 @@ class TTSService:
 
         # Register factories for every supported language. Backends are
         # instantiated either eagerly here (if listed in TTS_PRELOAD_LANGUAGES)
-        # or lazily on first synth request — Bark (~1.5 GB) is the slow one,
-        # so by default it's left cold so server startup stays snappy.
+        # or lazily on first synth request. The production default preloads all
+        # languages so the result speaker buttons do not block on model load.
         device = self.device
         hf_token = self.settings.hf_token
         self._factories = {

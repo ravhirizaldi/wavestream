@@ -20,6 +20,8 @@ from services.common import (
 from services.config import Settings
 
 _PUNCTUATION_ONLY_PATTERN = re.compile(r"^[\W_]+$", flags=re.UNICODE)
+_SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?。！？])\s+")
+_MAX_NLLB_UNIT_WORDS = 18
 _ENGLISH_CODES = frozenset({"en", "eng"})
 _INDONESIAN_CODES = frozenset({"id", "ind"})
 _JAPANESE_CODES = frozenset({"ja", "jpn"})
@@ -395,6 +397,41 @@ class OpusMTService:
         cleaned = text.strip()
         if not cleaned or _PUNCTUATION_ONLY_PATTERN.match(cleaned):
             return ""
+        units = self._split_translation_units(cleaned)
+        if len(units) > 1:
+            translated_units = [
+                self._translate_nllb_unit(unit, source_language, target_language)
+                for unit in units
+            ]
+            return clean_output_text(" ".join(unit for unit in translated_units if unit))
+
+        return self._translate_nllb_unit(cleaned, source_language, target_language)
+
+    def _split_translation_units(self, text: str) -> list[str]:
+        units = [
+            part.strip()
+            for part in _SENTENCE_SPLIT_PATTERN.split(text.strip())
+            if part.strip()
+        ]
+        if not units:
+            return []
+
+        split_units: list[str] = []
+        for unit in units:
+            words = unit.split()
+            if len(words) <= _MAX_NLLB_UNIT_WORDS:
+                split_units.append(unit)
+                continue
+            for idx in range(0, len(words), _MAX_NLLB_UNIT_WORDS):
+                split_units.append(" ".join(words[idx:idx + _MAX_NLLB_UNIT_WORDS]))
+        return split_units
+
+    def _translate_nllb_unit(
+        self,
+        text: str,
+        source_language: str,
+        target_language: str,
+    ) -> str:
         if self._nllb_tokenizer is None or self._nllb_model is None or self.device is None:
             raise RuntimeError("NLLB model not loaded.")
 
@@ -437,9 +474,6 @@ class OpusMTService:
                 "length_penalty": self.settings.opus_length_penalty,
                 "early_stopping": num_beams > 1,
             }
-            no_repeat = self.settings.opus_no_repeat_ngram_size
-            if no_repeat and no_repeat > 0:
-                generate_kwargs["no_repeat_ngram_size"] = no_repeat
 
             with torch.inference_mode():
                 tokens = model.generate(**inputs, **generate_kwargs)

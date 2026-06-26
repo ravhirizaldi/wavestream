@@ -110,7 +110,7 @@ def load_settings() -> Settings:
         # Opus/Marian checkpoints produce visibly weak EN→ID/JA/TL results on
         # normal speech transcripts. Set MT_BACKEND=opus to use the old stack.
         mt_backend=_env_str("MT_BACKEND", "nllb"),
-        nllb_model_id=_env_str("NLLB_MODEL_ID", "facebook/nllb-200-distilled-600M"),
+        nllb_model_id=_env_str("NLLB_MODEL_ID", "facebook/nllb-200-3.3B"),
         # OpusMT — Helsinki-NLP MarianMT, purpose-built NMT, ~300 MB each
         opus_id_model_id=_env_str("OPUS_ID_MODEL_ID", "Helsinki-NLP/opus-mt-en-id"),
         opus_ja_model_id=_env_str("OPUS_JA_MODEL_ID", "Helsinki-NLP/opus-mt-en-jap"),
@@ -147,7 +147,7 @@ def load_settings() -> Settings:
         # Languages whose TTS backend should be eager-loaded at startup.
         # Anything not listed here is loaded lazily on first synth request.
         # Default skips "ja" because Bark (~1.5 GB) dominates startup time.
-        tts_preload_languages=_env_str("TTS_PRELOAD_LANGUAGES", "en,id"),
+        tts_preload_languages=_env_str("TTS_PRELOAD_LANGUAGES", "en,id,pt,tl,ja"),
         # Shared
         hf_token=os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN"),
         preferred_device=os.getenv("MODEL_DEVICE"),

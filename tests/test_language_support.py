@@ -138,6 +138,23 @@ class LanguageSupportTests(unittest.TestCase):
         self.assertEqual(service.translate_to_english("kumusta", "fil"), "fil->en:kumusta")
         self.assertIsNone(service.translate_to_english("bonjour", "fr"))
 
+    def test_nllb_splits_long_translation_text_into_smaller_units(self) -> None:
+        service = _make_nllb_service()
+        text = (
+            "one two three four five six seven eight nine ten eleven twelve "
+            "thirteen fourteen fifteen sixteen seventeen eighteen nineteen. "
+            "short sentence."
+        )
+
+        self.assertEqual(
+            service._split_translation_units(text),
+            [
+                "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen",
+                "nineteen.",
+                "short sentence.",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,8 +32,8 @@ These are the models loaded by default from [`services/config.py`](/home/ravhi/r
 
 | Purpose | Default model ID | Where used |
 | --- | --- | --- |
-| Speech-to-text production template | `openai/whisper-large-v3-turbo` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
-| Multilingual MT | `facebook/nllb-200-distilled-600M` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Speech-to-text production template | `openai/whisper-large-v3` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
+| Multilingual MT | `facebook/nllb-200-3.3B` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Indonesian MT fallback | `Helsinki-NLP/opus-mt-en-id` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Japanese MT fallback | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Brazilian Portuguese MT fallback | `Helsinki-NLP/opus-mt-en-ROMANCE` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
@@ -151,10 +151,10 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 ### Whisper
 
 - `WHISPER_BACKEND=faster-whisper`
-- `WHISPER_MODEL_ID=openai/whisper-large-v3-turbo`
+- `WHISPER_MODEL_ID=openai/whisper-large-v3`
 - `WHISPER_COMPUTE_TYPE=float16`
-- `WHISPER_NUM_BEAMS=3`
-- `WHISPER_CPU_THREADS=4`
+- `WHISPER_NUM_BEAMS=5`
+- `WHISPER_CPU_THREADS=8`
 - `WHISPER_CONCURRENCY=2`
 - `WHISPER_CHUNK_LENGTH_SECONDS=12`
 - `WHISPER_SHORT_AUDIO_THRESHOLD_SECONDS=12.0`
@@ -168,7 +168,7 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 ### Translation
 
 - `MT_BACKEND=nllb`
-- `NLLB_MODEL_ID=facebook/nllb-200-distilled-600M`
+- `NLLB_MODEL_ID=facebook/nllb-200-3.3B`
 
 ### OpusMT
 
@@ -183,7 +183,7 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `OPUS_PT_TARGET_TOKEN='>>pt_BR<<'`
 - `OPUS_NUM_BEAMS=2`
 - `OPUS_MAX_NEW_TOKENS=384`
-- `OPUS_NO_REPEAT_NGRAM_SIZE=3`
+- `OPUS_NO_REPEAT_NGRAM_SIZE=0`
 - `OPUS_LENGTH_PENALTY=1.0`
 
 ### TTS
@@ -195,6 +195,7 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `TTS_JA_MODEL_ID=suno/bark-small`
 - `TTS_JA_VOICE=v2/ja_speaker_0`
 - `TTS_SPEAKING_RATE=1.0`
+- `TTS_PRELOAD_LANGUAGES=en,id,pt,tl,ja`
 
 ### Shared runtime/audio
 
