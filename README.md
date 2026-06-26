@@ -174,7 +174,7 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `OPUS_JA_EN_MODEL_ID=staka/fugumt-ja-en` (FuGuMT, drop-in MarianMT replacement — dramatically more faithful than `Helsinki-NLP/opus-mt-ja-en` on conversational JA)
 - `OPUS_PT_EN_MODEL_ID=Helsinki-NLP/opus-mt-ROMANCE-en`
 - `OPUS_TL_EN_MODEL_ID=Helsinki-NLP/opus-mt-tl-en`
-- `OPUS_PT_TARGET_TOKEN=>>pt_BR<<`
+- `OPUS_PT_TARGET_TOKEN='>>pt_BR<<'`
 - `OPUS_NUM_BEAMS=2` (FuGuMT-ja-en is most faithful at low beams; Helsinki-NLP models in the other directions are insensitive to 2 vs 5)
 - `OPUS_MAX_NEW_TOKENS=384`
 - `OPUS_NO_REPEAT_NGRAM_SIZE=3`
