@@ -1,6 +1,6 @@
 # RunPod Voice Translation App
 
-Push-to-talk voice translation app for RunPod with a browser mic UI, FastAPI backend, trilingual translation output, and optional text-to-speech playback.
+Push-to-talk voice translation app for RunPod with a browser mic UI, FastAPI backend, multilingual translation output, and optional text-to-speech playback.
 
 The current repo is an app-first deployment, not a notebook-only snapshot. The live server boots from `app.py`, serves `templates/index.html`, and loads the translation plus TTS services on startup.
 
@@ -9,15 +9,19 @@ The current repo is an app-first deployment, not a notebook-only snapshot. The l
 1. Hold `Space` or press the microphone button in the browser.
 2. The browser records PCM audio and uploads a WAV file to `POST /api/translate`.
 3. Whisper produces the original-language transcript.
-4. OpusMT produces English from Japanese or Indonesian text, avoiding a second Whisper audio pass.
+4. OpusMT produces English from supported non-English source text when Whisper did not already return an English translation, avoiding a second Whisper audio pass.
 5. OpusMT translates the English text into:
    - Indonesian
    - Japanese
-6. The UI renders all three text outputs:
+   - Brazilian Portuguese
+   - Filipino
+6. The UI renders the source transcript plus supported-language outputs:
    - source transcript
    - English
    - Indonesian
    - Japanese
+   - Brazilian Portuguese
+   - Filipino
 7. The browser can request generated speech from `POST /api/tts`.
 
 ## Models In This Codebase
@@ -31,10 +35,16 @@ These are the models loaded by default from [`services/config.py`](/home/ravhi/r
 | Speech-to-text | `openai/whisper-large-v3` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
 | English -> Indonesian MT | `Helsinki-NLP/opus-mt-en-id` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Japanese MT | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Brazilian Portuguese MT | `Helsinki-NLP/opus-mt-en-ROMANCE` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Filipino MT | `Helsinki-NLP/opus-mt-en-tl` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Indonesian -> English MT | `Helsinki-NLP/opus-mt-id-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Japanese -> English MT | `staka/fugumt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Portuguese -> English MT | `Helsinki-NLP/opus-mt-ROMANCE-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Filipino -> English MT | `Helsinki-NLP/opus-mt-tl-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English TTS | `facebook/mms-tts-eng` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Indonesian TTS | `facebook/mms-tts-ind` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
+| Portuguese TTS | `facebook/mms-tts-por` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
+| Filipino TTS | `facebook/mms-tts-tgl` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Japanese TTS | `suno/bark-small` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 
 ### Supported configurable model variants
@@ -82,6 +92,8 @@ Returns:
 - `translationEnglish`
 - `translationIndonesian`
 - `translationJapanese`
+- `translationPortuguese`
+- `translationFilipino`
 - `audioDurationSeconds`
 - `processingSeconds`
 
@@ -156,8 +168,13 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 
 - `OPUS_ID_MODEL_ID=Helsinki-NLP/opus-mt-en-id`
 - `OPUS_JA_MODEL_ID=Helsinki-NLP/opus-mt-en-jap`
+- `OPUS_PT_MODEL_ID=Helsinki-NLP/opus-mt-en-ROMANCE`
+- `OPUS_TL_MODEL_ID=Helsinki-NLP/opus-mt-en-tl`
 - `OPUS_ID_EN_MODEL_ID=Helsinki-NLP/opus-mt-id-en`
 - `OPUS_JA_EN_MODEL_ID=staka/fugumt-ja-en` (FuGuMT, drop-in MarianMT replacement — dramatically more faithful than `Helsinki-NLP/opus-mt-ja-en` on conversational JA)
+- `OPUS_PT_EN_MODEL_ID=Helsinki-NLP/opus-mt-ROMANCE-en`
+- `OPUS_TL_EN_MODEL_ID=Helsinki-NLP/opus-mt-tl-en`
+- `OPUS_PT_TARGET_TOKEN=>>pt_BR<<`
 - `OPUS_NUM_BEAMS=2` (FuGuMT-ja-en is most faithful at low beams; Helsinki-NLP models in the other directions are insensitive to 2 vs 5)
 - `OPUS_MAX_NEW_TOKENS=384`
 - `OPUS_NO_REPEAT_NGRAM_SIZE=3`
@@ -167,6 +184,8 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 
 - `TTS_EN_MODEL_ID=facebook/mms-tts-eng`
 - `TTS_ID_MODEL_ID=facebook/mms-tts-ind`
+- `TTS_PT_MODEL_ID=facebook/mms-tts-por`
+- `TTS_TL_MODEL_ID=facebook/mms-tts-tgl`
 - `TTS_JA_MODEL_ID=suno/bark-small`
 - `TTS_JA_VOICE=v2/ja_speaker_0`
 - `TTS_SPEAKING_RATE=1.0`
@@ -194,10 +213,16 @@ These are practical deployment requirements for the current default stack in thi
 - `openai/whisper-large-v3`
 - `Helsinki-NLP/opus-mt-en-id`
 - `Helsinki-NLP/opus-mt-en-jap`
+- `Helsinki-NLP/opus-mt-en-ROMANCE`
+- `Helsinki-NLP/opus-mt-en-tl`
 - `Helsinki-NLP/opus-mt-id-en`
 - `staka/fugumt-ja-en`
+- `Helsinki-NLP/opus-mt-ROMANCE-en`
+- `Helsinki-NLP/opus-mt-tl-en`
 - `facebook/mms-tts-eng`
 - `facebook/mms-tts-ind`
+- `facebook/mms-tts-por`
+- `facebook/mms-tts-tgl`
 - `suno/bark-small`
 
 They are not hard-coded startup checks, but they reflect what you should provision if you want the app to feel responsive.
@@ -207,7 +232,7 @@ They are not hard-coded startup checks, but they reflect what you should provisi
 - GPU: NVIDIA CUDA GPU with at least `16 GB` VRAM
 - CPU: `8 vCPU` or better
 - System RAM: `16 GB`
-- Disk: `25 GB` free SSD space for environment, model cache, and temporary files
+- Disk: `35 GB` free SSD space for environment, model cache, and temporary files
 - Network: stable internet for initial Hugging Face model download/authentication
 
 This tier is the practical floor for the shipped defaults. It may still feel tight during model load or if you keep `WHISPER_CONCURRENCY=2`.
@@ -217,9 +242,9 @@ This tier is the practical floor for the shipped defaults. It may still feel tig
 - GPU: NVIDIA CUDA GPU with `24 GB` VRAM or more
 - CPU: `8-16 vCPU`
 - System RAM: `24-32 GB`
-- Disk: `40 GB+` free SSD space
+- Disk: `55 GB+` free SSD space
 
-This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with the default Whisper, four OpusMT models, and multilingual TTS loaded together.
+This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with the default Whisper, eight OpusMT models, and multilingual TTS loaded together.
 
 ### Low-spec or fallback mode
 
@@ -232,7 +257,7 @@ This is the safer target for smoother startup, fewer memory-pressure issues, and
 ### Provisioning notes
 
 - The Japanese TTS path is the heaviest extra TTS load in the default setup because it uses `suno/bark-small`.
-- The four OpusMT models and two MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
+- The eight OpusMT models and four MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
 - Use SSD-backed storage. First boot can be much slower if the model cache has to be downloaded into a cold environment.
 - Match your PyTorch install to the CUDA version on the machine or RunPod image before starting the service.
 

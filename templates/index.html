@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexto StreamWave</title>
-    <meta name="description" content="Nexto StreamWave — real-time trilingual voice translation between Japanese, English, and Indonesian." />
+    <meta name="description" content="Nexto StreamWave — real-time voice translation between Japanese, English, Indonesian, Brazilian Portuguese, and Filipino." />
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -37,6 +37,8 @@
         --ja-clr: #e06c6c;
         --en-clr: #7aabe8;
         --id-clr: #6cc98f;
+        --pt-clr: #d4b34f;
+        --tl-clr: #c884f0;
       }
 
       html, body {
@@ -97,6 +99,8 @@
       .lang-pill.ja { color: var(--ja-clr); border-color: rgba(224,108,108,0.25); background: rgba(224,108,108,0.06); }
       .lang-pill.en { color: var(--en-clr); border-color: rgba(122,171,232,0.25); background: rgba(122,171,232,0.06); }
       .lang-pill.id { color: var(--id-clr); border-color: rgba(108,201,143,0.25); background: rgba(108,201,143,0.06); }
+      .lang-pill.pt { color: var(--pt-clr); border-color: rgba(212,179,79,0.25); background: rgba(212,179,79,0.06); }
+      .lang-pill.tl { color: var(--tl-clr); border-color: rgba(200,132,240,0.25); background: rgba(200,132,240,0.06); }
       .lang-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 
       /* ─── Status chip ─── */
@@ -138,9 +142,9 @@
         max-width: 34ch;
       }
 
-      /* language trio badge */
+      /* language badge row */
       .lang-trio {
-        display: flex; align-items: center; justify-content: center;
+        display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
         gap: 0.5rem; margin-top: 0.75rem;
       }
       .trio-sep {
@@ -154,6 +158,8 @@
       .trio-tag.ja { color: var(--ja-clr); border-color: rgba(224,108,108,0.3); }
       .trio-tag.en { color: var(--en-clr); border-color: rgba(122,171,232,0.3); }
       .trio-tag.id { color: var(--id-clr); border-color: rgba(108,201,143,0.3); }
+      .trio-tag.pt { color: var(--pt-clr); border-color: rgba(212,179,79,0.3); }
+      .trio-tag.tl { color: var(--tl-clr); border-color: rgba(200,132,240,0.3); }
 
       /* ─── Waveform canvas ─────────────────────────────────────────── */
       .wave-canvas {
@@ -349,12 +355,12 @@
         color: var(--text); letter-spacing: -0.01em;
       }
 
-      /* ─── Dynamic 3-column body ─── */
+      /* ─── Dynamic language result grid ─── */
       .modal-body {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
         flex: 1;
-        overflow: hidden;
+        overflow: auto;
         min-height: 0;
       }
 
@@ -381,6 +387,8 @@
       .lang-dot.ja { background: var(--ja-clr); box-shadow: 0 0 6px rgba(224,108,108,0.5); }
       .lang-dot.en { background: var(--en-clr); box-shadow: 0 0 6px rgba(122,171,232,0.5); }
       .lang-dot.id { background: var(--id-clr); box-shadow: 0 0 6px rgba(108,201,143,0.5); }
+      .lang-dot.pt { background: var(--pt-clr); box-shadow: 0 0 6px rgba(212,179,79,0.5); }
+      .lang-dot.tl { background: var(--tl-clr); box-shadow: 0 0 6px rgba(200,132,240,0.5); }
       .lang-dot.src { background: var(--text-muted); }
 
       .result-col-text {
@@ -612,6 +620,8 @@
         <span class="lang-pill ja"><span class="dot"></span>JA</span>
         <span class="lang-pill en"><span class="dot"></span>EN</span>
         <span class="lang-pill id"><span class="dot"></span>ID</span>
+        <span class="lang-pill pt"><span class="dot"></span>PT</span>
+        <span class="lang-pill tl"><span class="dot"></span>FIL</span>
       </div>
       <div id="statusChip" class="status-chip idle">
         <span class="dot"></span>
@@ -647,7 +657,7 @@
         <div class="modal-header">
           <div class="modal-title-group">
             <p class="modal-label">Translation result</p>
-            <h2 class="modal-title" id="resultModalTitle">Trilingual response</h2>
+            <h2 class="modal-title" id="resultModalTitle">Multilingual response</h2>
           </div>
           <button id="resultClose" class="modal-close" aria-label="Close">
             <i data-lucide="x" style="width:14px;height:14px;"></i>
@@ -679,7 +689,7 @@
           </div>
         </div>
 
-        <!-- Dynamic 3-column body: populated by JS -->
+        <!-- Dynamic language body: populated by JS -->
         <div id="modalBody" class="modal-body">
           <!-- Columns injected by renderResult() -->
         </div>
@@ -725,13 +735,17 @@
       <div class="card">
         <div>
           <h1 class="tagline-title">Speak once.<br>Understood by all.</h1>
-          <p class="tagline-sub">Real-time voice translation between Japanese, English, and Indonesian.</p>
+          <p class="tagline-sub">Real-time voice translation across Japanese, English, Indonesian, Brazilian Portuguese, and Filipino.</p>
           <div class="lang-trio">
             <span class="trio-tag ja">日本語</span>
             <span class="trio-sep">↔</span>
             <span class="trio-tag en">English</span>
             <span class="trio-sep">↔</span>
             <span class="trio-tag id">Indonesia</span>
+            <span class="trio-sep">↔</span>
+            <span class="trio-tag pt">Português BR</span>
+            <span class="trio-sep">↔</span>
+            <span class="trio-tag tl">Filipino</span>
           </div>
         </div>
 
@@ -868,7 +882,7 @@
         { until: 0.6,  label: 'Uploading recording'                  },
         { until: 2.5,  label: 'Transcribing speech'                  },
         { until: 5.0,  label: 'Translating to English'               },
-        { until: 8.0,  label: 'Translating to Indonesian & Japanese' },
+        { until: 8.0,  label: 'Translating target languages'         },
         { until: Infinity, label: 'Almost there — finishing up'      },
       ];
       const LOADING_TAU = 2.8;
@@ -946,22 +960,30 @@
         eng: { label: 'English',    tag: 'EN', dotClass: 'en', nativeName: 'English' },
         id:  { label: 'Indonesian', tag: 'ID', dotClass: 'id', nativeName: 'Indonesia' },
         ind: { label: 'Indonesian', tag: 'ID', dotClass: 'id', nativeName: 'Indonesia' },
+        pt:  { label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', nativeName: 'Português BR' },
+        por: { label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', nativeName: 'Português BR' },
+        pt_br: { label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', nativeName: 'Português BR' },
+        tl:  { label: 'Filipino',   tag: 'FIL', dotClass: 'tl', nativeName: 'Filipino' },
+        tgl: { label: 'Filipino',   tag: 'FIL', dotClass: 'tl', nativeName: 'Filipino' },
+        fil: { label: 'Filipino',   tag: 'FIL', dotClass: 'tl', nativeName: 'Filipino' },
       };
 
       const DEFAULT_LANG = { label: 'Unknown', tag: '??', dotClass: 'src', nativeName: 'Unknown' };
 
+      const TARGET_COLUMNS = [
+        { key: 'en', label: 'English', tag: 'EN', dotClass: 'en', lang: 'en', field: 'translationEnglish', aliases: ['en', 'eng'] },
+        { key: 'ja', label: 'Japanese', tag: 'JA', dotClass: 'ja', lang: 'ja', field: 'translationJapanese', aliases: ['ja', 'jpn'] },
+        { key: 'id', label: 'Indonesian', tag: 'ID', dotClass: 'id', lang: 'id', field: 'translationIndonesian', aliases: ['id', 'ind'] },
+        { key: 'pt', label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', lang: 'pt', field: 'translationPortuguese', aliases: ['pt', 'pt_br', 'por'] },
+        { key: 'tl', label: 'Filipino', tag: 'FIL', dotClass: 'tl', lang: 'tl', field: 'translationFilipino', aliases: ['tl', 'tgl', 'fil'] },
+      ];
+
       /**
-       * Based on detected source language, return the 3 column definitions.
-       * Always: [Original] + [two target languages not equal to source]
-       *
-       * Priority order for targets (Japanese client focus):
-       *   Source=JA → targets: English, Indonesian
-       *   Source=ID → targets: Japanese, English
-       *   Source=EN → targets: Japanese, Indonesian
-       *   Source=other → targets: English, Indonesian (with Japanese as 3rd = original)
+       * Based on detected source language, return source plus every supported
+       * non-source language in a stable scan order.
        */
       function getColumnDefs(detectedLang, payload) {
-        const lang = (detectedLang || '').toLowerCase();
+        const lang = (detectedLang || '').toLowerCase().replace(/-/g, '_');
         const cfg  = LANG_CONFIG[lang] || DEFAULT_LANG;
 
         const srcLang = lang || 'en';
@@ -974,16 +996,18 @@
           text:     payload.transcript,
         };
 
-        const enCol  = { label: 'English',    tag: 'EN', dotClass: 'en', isSource: false, lang: 'en', text: payload.translationEnglish    };
-        const idCol  = { label: 'Indonesian', tag: 'ID', dotClass: 'id', isSource: false, lang: 'id', text: payload.translationIndonesian };
-        const jaCol  = { label: 'Japanese',   tag: 'JA', dotClass: 'ja', isSource: false, lang: 'ja', text: payload.translationJapanese   };
+        const targets = TARGET_COLUMNS
+          .filter((col) => !col.aliases.includes(lang))
+          .map((col) => ({
+            label: col.label,
+            tag: col.tag,
+            dotClass: col.dotClass,
+            isSource: false,
+            lang: col.lang,
+            text: payload[col.field],
+          }));
 
-        if (lang === 'ja' || lang === 'jpn') return [srcCol, enCol, idCol];
-        if (lang === 'id' || lang === 'ind') return [srcCol, jaCol, enCol];
-        if (lang === 'en' || lang === 'eng') return [srcCol, jaCol, idCol];
-
-        // Unknown / other language: show all three translations
-        return [srcCol, enCol, jaCol, idCol];
+        return [srcCol, ...targets];
       }
 
       function buildModalColumns(cols) {
@@ -1439,7 +1463,7 @@
       function renderResult(payload) {
         // Use the label computed by the backend (already handles all language codes)
         // Fall back to deriving it from LANG_CONFIG only if missing
-        const lang  = (payload.detectedLanguage || '').toLowerCase();
+        const lang  = (payload.detectedLanguage || '').toLowerCase().replace(/-/g, '_');
         const label = payload.detectedLanguageLabel
                       || (LANG_CONFIG[lang] || DEFAULT_LANG).label;
         detectedLanguage.textContent   = label;

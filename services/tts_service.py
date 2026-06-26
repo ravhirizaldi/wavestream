@@ -26,6 +26,8 @@ _LANG_ALIASES: dict[str, str] = {
     "en": "en", "eng": "en",
     "ja": "ja", "jpn": "ja",
     "id": "id", "ind": "id",
+    "pt": "pt", "pt_br": "pt", "por": "pt",
+    "tl": "tl", "tgl": "tl", "fil": "tl",
 }
 _DEFAULT_LANG = "en"
 
@@ -52,7 +54,7 @@ class _Backend(ABC):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VITS backend  (MMS models — EN, ID)
+# VITS backend  (MMS models — EN, ID, PT, TL)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _VitsBackend(_Backend):
@@ -62,6 +64,8 @@ class _VitsBackend(_Backend):
     Available MMS models on HuggingFace:
         facebook/mms-tts-eng    English   (~130 MB)
         facebook/mms-tts-ind    Indonesian (~130 MB)
+        facebook/mms-tts-por    Portuguese (~130 MB)
+        facebook/mms-tts-tgl    Tagalog / Filipino (~130 MB)
     """
 
     def __init__(self, model_id: str, hf_token: str | None, device: torch.device) -> None:
@@ -186,12 +190,15 @@ class TTSService:
 
     Backend assignment:
         English     → VITS (facebook/mms-tts-eng)        fast, ~130 MB
-        Indonesian  → VITS (facebook/mms-tts-ind)         fast, ~130 MB
-        Japanese    → Bark (suno/bark-small by default)   good quality, ~1.5 GB
+        Indonesian  → VITS (facebook/mms-tts-ind)        fast, ~130 MB
+        Portuguese  → VITS (facebook/mms-tts-por)        fast, ~130 MB
+        Filipino    → VITS (facebook/mms-tts-tgl)        fast, ~130 MB
+        Japanese    → Bark (suno/bark-small by default)  good quality, ~1.5 GB
 
     All model IDs and Bark voice preset are configurable via env vars:
-        TTS_EN_MODEL_ID   TTS_ID_MODEL_ID   TTS_JA_MODEL_ID
-        TTS_JA_VOICE      TTS_SPEAKING_RATE
+        TTS_EN_MODEL_ID   TTS_ID_MODEL_ID   TTS_PT_MODEL_ID
+        TTS_TL_MODEL_ID   TTS_JA_MODEL_ID   TTS_JA_VOICE
+        TTS_SPEAKING_RATE
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -219,6 +226,8 @@ class TTSService:
         self._factories = {
             "en": lambda: _VitsBackend(self.settings.tts_en_model_id, hf_token, device),
             "id": lambda: _VitsBackend(self.settings.tts_id_model_id, hf_token, device),
+            "pt": lambda: _VitsBackend(self.settings.tts_pt_model_id, hf_token, device),
+            "tl": lambda: _VitsBackend(self.settings.tts_tl_model_id, hf_token, device),
             "ja": lambda: _BarkBackend(
                 model_id      = self.settings.tts_ja_model_id,
                 hf_token      = hf_token,

@@ -26,6 +26,8 @@ class TranslationResponse(BaseModel):
     translationEnglish: str
     translationIndonesian: str
     translationJapanese: str
+    translationPortuguese: str
+    translationFilipino: str
     audioDurationSeconds: float
     processingSeconds: float
 
@@ -41,12 +43,18 @@ def _log_startup(current_settings: Settings, pipeline: TranslationPipeline) -> N
     print(f"Whisper concur.   : {current_settings.whisper_concurrency}")
     print(f"OpusMT EN→ID     : {current_settings.opus_id_model_id}")
     print(f"OpusMT EN→JA     : {current_settings.opus_ja_model_id}")
+    print(f"OpusMT EN→PT     : {current_settings.opus_pt_model_id}  target={current_settings.opus_pt_target_token}")
+    print(f"OpusMT EN→TL     : {current_settings.opus_tl_model_id}")
     print(f"OpusMT ID→EN     : {current_settings.opus_id_en_model_id}")
     print(f"OpusMT JA→EN     : {current_settings.opus_ja_en_model_id}")
+    print(f"OpusMT PT→EN     : {current_settings.opus_pt_en_model_id}")
+    print(f"OpusMT TL→EN     : {current_settings.opus_tl_en_model_id}")
     print(f"Opus beams        : {current_settings.opus_num_beams}")
     print(f"TTS EN            : {current_settings.tts_en_model_id}")
     print(f"TTS JA            : {current_settings.tts_ja_model_id}  voice={current_settings.tts_ja_voice}")
     print(f"TTS ID            : {current_settings.tts_id_model_id}")
+    print(f"TTS PT            : {current_settings.tts_pt_model_id}")
+    print(f"TTS TL            : {current_settings.tts_tl_model_id}")
     print(f"Device            : {pipeline.whisper.device}")
     print(f"Dtype             : {pipeline.whisper.torch_dtype}")
     print("")
@@ -104,6 +112,8 @@ async def translate_audio(
         translationEnglish=payload.translation_english,
         translationIndonesian=payload.translation_indonesian,
         translationJapanese=payload.translation_japanese,
+        translationPortuguese=payload.translation_portuguese,
+        translationFilipino=payload.translation_filipino,
         audioDurationSeconds=payload.audio_duration_seconds,
         processingSeconds=payload.processing_seconds,
     )

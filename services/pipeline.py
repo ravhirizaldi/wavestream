@@ -4,6 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
+from services.common import normalize_lang_key
 from services.config import Settings
 from services.opus_service import OpusMTService
 from services.whisper_service import WhisperService
@@ -11,6 +12,8 @@ from services.whisper_service import WhisperService
 # Languages that have native OpusMT targets; anything else falls back to EN output.
 _JAPANESE_CODES  = frozenset({"ja", "jpn"})
 _INDONESIAN_CODES = frozenset({"id", "ind"})
+_PORTUGUESE_CODES = frozenset({"pt", "pt_br", "por"})
+_FILIPINO_CODES = frozenset({"tl", "tgl", "fil"})
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,8 @@ class TranslationResponsePayload:
     translation_english: str
     translation_indonesian: str
     translation_japanese: str
+    translation_portuguese: str
+    translation_filipino: str
     audio_duration_seconds: float
     processing_seconds: float
     stage_timings: dict[str, float] = field(default_factory=dict)
@@ -29,7 +34,7 @@ class TranslationResponsePayload:
 
 class TranslationPipeline:
     """
-    Trilingual pipeline — Japanese / English / Indonesian.
+    Multilingual pipeline — Japanese / English / Indonesian / Portuguese / Filipino.
 
     Flow
     ────
@@ -37,20 +42,24 @@ class TranslationPipeline:
         · task=transcribe  →  original-language transcript
         · task=translate   →  English translation when the source is non-English
 
-    2.  OpusMT (parallel, both ~50–150 ms each on GPU):
+    2.  OpusMT (parallel target-language translations):
         · Helsinki-NLP/opus-mt-en-id   English → Indonesian
         · Helsinki-NLP/opus-mt-en-jap  English → Japanese
+        · Helsinki-NLP/opus-mt-en-ROMANCE  English → Portuguese
+        · Helsinki-NLP/opus-mt-en-tl   English → Filipino / Tagalog
 
-        Smart skip: if the source IS Indonesian or Japanese the model call is
-        skipped and the original transcript is reused directly, saving time and
-        preserving character-perfect output.
+        Smart skip: if the source is already one of the target languages, that
+        target model call is skipped and the original transcript is reused
+        directly, saving time and preserving character-perfect output.
 
     Detected language  →  what gets reused vs translated
     ──────────────────────────────────────────────────────
-    Japanese   (ja)   transcript=JA  EN=Whisper  ID=OPUS  JA=transcript
-    Indonesian (id)   transcript=ID  EN=Whisper  ID=transcript  JA=OPUS
-    English    (en)   transcript=EN  EN=Whisper  ID=OPUS  JA=OPUS
-    Other             transcript=XX  EN=Whisper  ID=OPUS  JA=OPUS
+    Japanese      (ja)  transcript=JA  EN=Whisper  JA=transcript
+    Indonesian    (id)  transcript=ID  EN=Whisper  ID=transcript
+    Portuguese    (pt)  transcript=PT  EN=Whisper  PT=transcript
+    Filipino      (tl)  transcript=TL  EN=Whisper  TL=transcript
+    English       (en)  transcript=EN  EN=transcript  targets=OPUS
+    Other               transcript=XX  EN=Whisper  targets=OPUS
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -68,7 +77,7 @@ class TranslationPipeline:
         started_at = time.perf_counter()
         # ── Step 1: Whisper ──────────────────────────────────────────────
         transcription = self.whisper.transcribe_bytes(audio_bytes)
-        lang = transcription.detected_language.lower()
+        lang = normalize_lang_key(transcription.detected_language)
 
         # ── Step 2: Determine what English text to feed OPUS ────────────
         english_text = transcription.translation_english
@@ -94,17 +103,22 @@ class TranslationPipeline:
                 time.perf_counter() - fallback_started_at
             )
 
-        # When source is JA or ID the original transcript IS that language.
+        # When the source is a supported target, the original transcript IS
+        # that target language and should be reused verbatim.
         source_as_indonesian = transcription.transcript if lang in _INDONESIAN_CODES else ""
         source_as_japanese   = transcription.transcript if lang in _JAPANESE_CODES   else ""
+        source_as_portuguese = transcription.transcript if lang in _PORTUGUESE_CODES else ""
+        source_as_filipino   = transcription.transcript if lang in _FILIPINO_CODES   else ""
 
-        # ── Step 3: OpusMT — EN→ID and EN→JA in parallel ────────────────
+        # ── Step 3: OpusMT — EN→targets in parallel ─────────────────────
         opus_started_at = time.perf_counter()
         opus_result = self.opus.translate(
             english_text=english_text,
             detected_language=lang,
             source_indonesian=source_as_indonesian,
             source_japanese=source_as_japanese,
+            source_portuguese=source_as_portuguese,
+            source_filipino=source_as_filipino,
         )
         stage_timings["opus"] = time.perf_counter() - opus_started_at
         total_processing_seconds = time.perf_counter() - started_at
@@ -124,6 +138,8 @@ class TranslationPipeline:
             translation_english=english_text,
             translation_indonesian=opus_result.indonesian,
             translation_japanese=opus_result.japanese,
+            translation_portuguese=opus_result.portuguese,
+            translation_filipino=opus_result.filipino,
             audio_duration_seconds=transcription.audio_duration_seconds,
             processing_seconds=total_processing_seconds,
             stage_timings=stage_timings,
