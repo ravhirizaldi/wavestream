@@ -22,7 +22,7 @@ class _InlineExecutor:
 
 
 def _make_service() -> OpusMTService:
-    service = OpusMTService(SimpleNamespace(opus_pt_target_token=">>pt_BR<<"))
+    service = OpusMTService(SimpleNamespace(mt_backend="opus", opus_pt_target_token=">>pt_BR<<"))
     service._executor = _InlineExecutor()
     service._id_tokenizer = "id"
     service._ja_tokenizer = "ja"
@@ -33,6 +33,10 @@ def _make_service() -> OpusMTService:
     service._pt_en_tokenizer = "pt_en"
     service._tl_en_tokenizer = "tl_en"
     return service
+
+
+def _make_nllb_service() -> OpusMTService:
+    return OpusMTService(SimpleNamespace(mt_backend="nllb"))
 
 
 class LanguageSupportTests(unittest.TestCase):
@@ -96,6 +100,43 @@ class LanguageSupportTests(unittest.TestCase):
 
         self.assertEqual(service.translate_to_english("ola", "por"), "pt_en:ola")
         self.assertEqual(service.translate_to_english("kumusta", "fil"), "tl_en:kumusta")
+
+    def test_nllb_translate_routes_english_to_all_target_languages(self) -> None:
+        service = _make_nllb_service()
+        calls: list[tuple[str, str, str]] = []
+
+        def fake_translate(text, source_language, target_language):
+            calls.append((text, source_language, target_language))
+            return f"{source_language}->{target_language}:{text}"
+
+        service._translate_nllb = fake_translate  # type: ignore[method-assign]
+
+        result = service.translate(english_text="hello", detected_language="en")
+
+        self.assertEqual(result.indonesian, "en->id:hello")
+        self.assertEqual(result.japanese, "en->ja:hello")
+        self.assertEqual(result.portuguese, "en->pt:hello")
+        self.assertEqual(result.filipino, "en->tl:hello")
+        self.assertEqual(
+            calls,
+            [
+                ("hello", "en", "id"),
+                ("hello", "en", "ja"),
+                ("hello", "en", "pt"),
+                ("hello", "en", "tl"),
+            ],
+        )
+
+    def test_nllb_translate_to_english_uses_detected_language(self) -> None:
+        service = _make_nllb_service()
+
+        def fake_translate(text, source_language, target_language):
+            return f"{source_language}->{target_language}:{text}"
+
+        service._translate_nllb = fake_translate  # type: ignore[method-assign]
+
+        self.assertEqual(service.translate_to_english("kumusta", "fil"), "fil->en:kumusta")
+        self.assertIsNone(service.translate_to_english("bonjour", "fr"))
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ The current repo is an app-first deployment, not a notebook-only snapshot. The l
 1. Hold `Space` or press the microphone button in the browser.
 2. The browser records PCM audio and uploads a WAV file to `POST /api/translate`.
 3. Whisper produces the original-language transcript.
-4. OpusMT produces English from supported non-English source text when Whisper did not already return an English translation, avoiding a second Whisper audio pass.
-5. OpusMT translates the English text into:
+4. The MT backend produces English from supported non-English source text when Whisper did not already return an English translation, avoiding a second Whisper audio pass.
+5. The MT backend translates the English text into:
    - Indonesian
    - Japanese
    - Brazilian Portuguese
@@ -32,15 +32,16 @@ These are the models loaded by default from [`services/config.py`](/home/ravhi/r
 
 | Purpose | Default model ID | Where used |
 | --- | --- | --- |
-| Speech-to-text | `openai/whisper-large-v3` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
-| English -> Indonesian MT | `Helsinki-NLP/opus-mt-en-id` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| English -> Japanese MT | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| English -> Brazilian Portuguese MT | `Helsinki-NLP/opus-mt-en-ROMANCE` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| English -> Filipino MT | `Helsinki-NLP/opus-mt-en-tl` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| Indonesian -> English MT | `Helsinki-NLP/opus-mt-id-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| Japanese -> English MT | `staka/fugumt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| Portuguese -> English MT | `Helsinki-NLP/opus-mt-ROMANCE-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
-| Filipino -> English MT | `Helsinki-NLP/opus-mt-tl-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Speech-to-text production template | `openai/whisper-large-v3-turbo` | [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:43) |
+| Multilingual MT | `facebook/nllb-200-distilled-600M` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Indonesian MT fallback | `Helsinki-NLP/opus-mt-en-id` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Japanese MT fallback | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Brazilian Portuguese MT fallback | `Helsinki-NLP/opus-mt-en-ROMANCE` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Filipino MT fallback | `Helsinki-NLP/opus-mt-en-tl` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Indonesian -> English MT fallback | `Helsinki-NLP/opus-mt-id-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Japanese -> English MT fallback | `staka/fugumt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Portuguese -> English MT fallback | `Helsinki-NLP/opus-mt-ROMANCE-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Filipino -> English MT fallback | `Helsinki-NLP/opus-mt-tl-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English TTS | `facebook/mms-tts-eng` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Indonesian TTS | `facebook/mms-tts-ind` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Portuguese TTS | `facebook/mms-tts-por` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
@@ -150,9 +151,9 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 ### Whisper
 
 - `WHISPER_BACKEND=faster-whisper`
-- `WHISPER_MODEL_ID=openai/whisper-large-v3`
-- `WHISPER_COMPUTE_TYPE=auto`
-- `WHISPER_NUM_BEAMS=5`
+- `WHISPER_MODEL_ID=openai/whisper-large-v3-turbo`
+- `WHISPER_COMPUTE_TYPE=float16`
+- `WHISPER_NUM_BEAMS=3`
 - `WHISPER_CPU_THREADS=4`
 - `WHISPER_CONCURRENCY=2`
 - `WHISPER_CHUNK_LENGTH_SECONDS=12`
@@ -163,6 +164,11 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `WHISPER_COMPRESSION_RATIO_THRESHOLD=2.2`
 - `WHISPER_LOG_PROB_THRESHOLD=-0.8`
 - `WHISPER_NO_SPEECH_THRESHOLD=0.6`
+
+### Translation
+
+- `MT_BACKEND=nllb`
+- `NLLB_MODEL_ID=facebook/nllb-200-distilled-600M`
 
 ### OpusMT
 
@@ -175,7 +181,7 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `OPUS_PT_EN_MODEL_ID=Helsinki-NLP/opus-mt-ROMANCE-en`
 - `OPUS_TL_EN_MODEL_ID=Helsinki-NLP/opus-mt-tl-en`
 - `OPUS_PT_TARGET_TOKEN='>>pt_BR<<'`
-- `OPUS_NUM_BEAMS=2` (FuGuMT-ja-en is most faithful at low beams; Helsinki-NLP models in the other directions are insensitive to 2 vs 5)
+- `OPUS_NUM_BEAMS=2`
 - `OPUS_MAX_NEW_TOKENS=384`
 - `OPUS_NO_REPEAT_NGRAM_SIZE=3`
 - `OPUS_LENGTH_PENALTY=1.0`
@@ -192,8 +198,7 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 
 ### Shared runtime/audio
 
-- `HF_TOKEN=...`
-- `HUGGINGFACE_HUB_TOKEN=...`
+- `HF_TOKEN=` (leave empty for public Hugging Face models)
 - `MODEL_DEVICE=cuda`
 - `MODEL_DTYPE=float16`
 - `CHUNK_SECONDS=15`

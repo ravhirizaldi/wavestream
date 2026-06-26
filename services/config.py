@@ -45,6 +45,9 @@ class Settings:
     whisper_compression_ratio_threshold: float
     whisper_log_prob_threshold: float
     whisper_no_speech_threshold: float
+    # ── Machine translation backend ─────────────────────────────────────────
+    mt_backend: str
+    nllb_model_id: str
     # ── OpusMT (EN → target language) ────────────────────────────────────────
     opus_id_model_id: str   # English → Indonesian
     opus_ja_model_id: str   # English → Japanese
@@ -103,6 +106,11 @@ def load_settings() -> Settings:
         whisper_compression_ratio_threshold=_env_float("WHISPER_COMPRESSION_RATIO_THRESHOLD", 2.2),
         whisper_log_prob_threshold=_env_float("WHISPER_LOG_PROB_THRESHOLD", -0.8),
         whisper_no_speech_threshold=_env_float("WHISPER_NO_SPEECH_THRESHOLD", 0.6),
+        # NLLB is the default because the legacy per-language Helsinki-NLP
+        # Opus/Marian checkpoints produce visibly weak EN→ID/JA/TL results on
+        # normal speech transcripts. Set MT_BACKEND=opus to use the old stack.
+        mt_backend=_env_str("MT_BACKEND", "nllb"),
+        nllb_model_id=_env_str("NLLB_MODEL_ID", "facebook/nllb-200-distilled-600M"),
         # OpusMT — Helsinki-NLP MarianMT, purpose-built NMT, ~300 MB each
         opus_id_model_id=_env_str("OPUS_ID_MODEL_ID", "Helsinki-NLP/opus-mt-en-id"),
         opus_ja_model_id=_env_str("OPUS_JA_MODEL_ID", "Helsinki-NLP/opus-mt-en-jap"),
