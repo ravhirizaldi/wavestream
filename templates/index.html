@@ -64,8 +64,8 @@
       /* ─── Layout ─── */
       .app-shell {
         position: relative; z-index: 1;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        height: 100dvh; padding: 1.5rem;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        height: 100dvh; padding: calc(52px + 1.5rem) 1.5rem 1.5rem;
       }
 
       /* ─── Header ─── */
@@ -127,9 +127,11 @@
 
       /* ─── Center card ─── */
       .card {
-        display: flex; flex-direction: column; align-items: center;
-        justify-content: center; gap: 2rem; text-align: center;
+        position: relative;
+        display: grid; grid-template-rows: auto 1fr auto;
+        justify-items: center; align-items: center; gap: 1.25rem; text-align: center;
         width: 100%; max-width: 480px;
+        min-height: calc(100dvh - 52px - 3rem);
       }
 
       .tagline-title {
@@ -168,6 +170,19 @@
         height: 52px;
         border-radius: 10px;
         background: transparent;
+      }
+
+      .record-stage {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex; align-items: center; justify-content: center;
+        width: 100%; min-height: 260px;
+      }
+      .record-stage .wave-canvas {
+        position: absolute;
+        top: 1rem; left: 50%;
+        transform: translateX(-50%);
       }
 
       /* ─── Mic button ─── */
@@ -233,6 +248,37 @@
         display: flex; align-items: center; gap: 0.375rem;
         font-size: 0.75rem; color: var(--text-muted);
       }
+      .control-row {
+        display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+        align-self: end;
+        gap: 0.75rem 1rem;
+      }
+      .upload-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+        padding: 0.45rem 0.7rem; border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        background: rgba(255,255,255,0.03); color: var(--accent);
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 0.75rem; font-weight: 600; line-height: 1;
+        cursor: pointer; transition: all 0.16s ease;
+      }
+      .upload-btn:hover:not(:disabled) {
+        background: var(--surface-2);
+        border-color: rgba(255,255,255,0.18);
+        color: var(--text);
+      }
+      .upload-btn:active:not(:disabled) { transform: scale(0.98); }
+      .upload-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0,0,0,0);
+        white-space: nowrap; border: 0;
+      }
       .kbd {
         display: inline-flex; align-items: center; justify-content: center;
         padding: 0.2rem 0.6rem; border-radius: 5px;
@@ -245,6 +291,9 @@
 
       /* ─── Timer ─── */
       .timer {
+        position: absolute;
+        top: calc(50% + 90px); left: 50%;
+        transform: translateX(-50%);
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.875rem; font-weight: 500;
         color: var(--text-dim); letter-spacing: 0.04em;
@@ -605,6 +654,22 @@
           padding: 1.25rem;
           border-radius: 16px 16px 12px 12px;
         }
+
+        .app-shell {
+          padding: calc(52px + 1rem) 1rem 1rem;
+        }
+        .card {
+          min-height: calc(100dvh - 52px - 2rem);
+        }
+        .record-stage {
+          min-height: 240px;
+        }
+        .timer {
+          top: calc(50% + 82px);
+        }
+        .hint-row {
+          gap: 0.625rem;
+        }
       }
     </style>
   </head>
@@ -716,7 +781,7 @@
           <i data-lucide="audio-waveform" style="width:20px;height:20px;"></i>
         </div>
         <p class="loading-popup-title" id="loadingTitle">Translating your audio…</p>
-        <p id="loadingStage" class="loading-stage">Uploading recording</p>
+        <p id="loadingStage" class="loading-stage">Uploading audio</p>
         <div class="loading-progress" aria-hidden="true">
           <div id="loadingProgressFill" class="loading-progress-fill"></div>
         </div>
@@ -749,31 +814,46 @@
           </div>
         </div>
 
-        <!-- Waveform canvas -->
-        <canvas id="waveCanvas" class="wave-canvas" aria-hidden="true"></canvas>
+        <div class="record-stage">
+          <!-- Waveform canvas -->
+          <canvas id="waveCanvas" class="wave-canvas" aria-hidden="true"></canvas>
 
-        <!-- Mic Button -->
-        <button id="micButton" class="mic-btn" type="button" aria-label="Hold to speak">
-          <div class="icon-wrap">
-            <i data-lucide="mic" style="width:28px;height:28px;"></i>
-            <span class="mic-label">Hold</span>
-          </div>
-        </button>
+          <!-- Mic Button -->
+          <button id="micButton" class="mic-btn" type="button" aria-label="Hold to speak">
+            <div class="icon-wrap">
+              <i data-lucide="mic" style="width:28px;height:28px;"></i>
+              <span class="mic-label">Hold</span>
+            </div>
+          </button>
+        </div>
 
         <!-- Timer -->
         <div id="recordTimer" class="timer">00:00.00</div>
 
-        <!-- Hints -->
-        <div class="hint-row">
-          <div class="hint-item">
-            <kbd class="kbd">Space</kbd>
-            <span>to record</span>
+        <div class="control-row">
+          <!-- Hints -->
+          <div class="hint-row">
+            <div class="hint-item">
+              <kbd class="kbd">Space</kbd>
+              <span>to record</span>
+            </div>
+            <div class="sep"></div>
+            <div class="hint-item">
+              <i data-lucide="mouse-pointer-click" style="width:12px;height:12px;"></i>
+              <span>or hold button</span>
+            </div>
           </div>
-          <div class="sep"></div>
-          <div class="hint-item">
-            <i data-lucide="mouse-pointer-click" style="width:12px;height:12px;"></i>
-            <span>or hold button</span>
-          </div>
+
+          <button id="audioUploadButton" class="upload-btn" type="button">
+            <i data-lucide="upload" style="width:13px;height:13px;"></i>
+            Upload audio
+          </button>
+          <input
+            id="audioUploadInput"
+            class="sr-only"
+            type="file"
+            accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.opus,.webm,.flac,.mp4"
+          />
         </div>
       </div>
     </main>
@@ -810,6 +890,8 @@
       const statusLabel   = document.getElementById('statusLabel');
       const recordTimer   = document.getElementById('recordTimer');
       const micButton     = document.getElementById('micButton');
+      const audioUploadButton = document.getElementById('audioUploadButton');
+      const audioUploadInput  = document.getElementById('audioUploadInput');
       const waveCanvas    = document.getElementById('waveCanvas');
       const waveCtx       = waveCanvas.getContext('2d');
 
@@ -879,7 +961,7 @@
       // with an asymptotic curve (capped at 95%) and stage labels driven by
       // elapsed time. The bar snaps to 100% only when the response arrives.
       const LOADING_STAGES = [
-        { until: 0.6,  label: 'Uploading recording'                  },
+        { until: 0.6,  label: 'Uploading audio'                      },
         { until: 2.5,  label: 'Transcribing speech'                  },
         { until: 5.0,  label: 'Translating to English'               },
         { until: 8.0,  label: 'Translating target languages'         },
@@ -1136,6 +1218,7 @@
         statusChip.className = `status-chip ${m.cls}`;
         statusLabel.textContent = m.label;
         micButton.classList.toggle('recording', mode === 'rec');
+        audioUploadButton.disabled = state.isRecording || state.isProcessing;
       }
 
       // ─── Timer ────────────────────────────────────────────────────────────
@@ -1426,7 +1509,7 @@
         await submitRecording(encodeWav(captured, state.sampleRate));
       }
 
-      async function submitRecording(blob) {
+      async function submitRecording(blob, fileName = 'utterance.wav') {
         state.isProcessing = true;
         setStatus('proc');
 
@@ -1434,7 +1517,10 @@
         openLoadingPopup(controller);
 
         const form = new FormData();
-        form.append('audio', new File([blob], 'utterance.wav', { type:'audio/wav' }));
+        const audioFile = blob instanceof File
+          ? blob
+          : new File([blob], fileName, { type: blob.type || 'audio/wav' });
+        form.append('audio', audioFile);
         form.append('utteranceId', crypto.randomUUID());
 
         try {
@@ -1457,7 +1543,15 @@
           }
         } finally {
           state.isProcessing = false;
+          audioUploadButton.disabled = false;
         }
+      }
+
+      async function submitUploadedAudio(file) {
+        if (!file || state.isRecording || state.isProcessing) return;
+        closePermModal();
+        closeResultModal();
+        await submitRecording(file, file.name || 'uploaded-audio');
       }
 
       function renderResult(payload) {
@@ -1512,6 +1606,17 @@
       micButton.addEventListener('pointercancel',      async () => releasePointer());
       micButton.addEventListener('lostpointercapture', async () => releasePointer());
       micButton.addEventListener('pointerleave',       async (e) => { if (e.buttons === 0) await releasePointer(); });
+
+      audioUploadButton.addEventListener('click', () => {
+        if (state.isRecording || state.isProcessing) return;
+        audioUploadInput.click();
+      });
+
+      audioUploadInput.addEventListener('change', async () => {
+        const file = audioUploadInput.files && audioUploadInput.files[0];
+        audioUploadInput.value = '';
+        await submitUploadedAudio(file);
+      });
 
       window.addEventListener('blur', async () => {
         state.keyboardActive = false;
