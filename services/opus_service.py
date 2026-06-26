@@ -432,6 +432,9 @@ class OpusMTService:
         source_language: str,
         target_language: str,
     ) -> str:
+        cleaned = text.strip()
+        if not cleaned or _PUNCTUATION_ONLY_PATTERN.match(cleaned):
+            return ""
         if self._nllb_tokenizer is None or self._nllb_model is None or self.device is None:
             raise RuntimeError("NLLB model not loaded.")
 

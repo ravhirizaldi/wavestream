@@ -21,6 +21,37 @@ class _InlineExecutor:
         return _InlineFuture(func(*args))
 
 
+class _FakeTensor:
+    def to(self, *_args, **_kwargs):
+        return self
+
+
+class _FakeTokenizer:
+    unk_token_id = -1
+
+    def __init__(self) -> None:
+        self.src_lang = ""
+        self.last_text = ""
+
+    def set_src_lang_special_tokens(self, lang: str) -> None:
+        self.src_lang = lang
+
+    def __call__(self, text, **_kwargs):
+        self.last_text = text
+        return {"input_ids": _FakeTensor()}
+
+    def convert_tokens_to_ids(self, token: str) -> int:
+        return 17 if token else self.unk_token_id
+
+    def batch_decode(self, _tokens, skip_special_tokens=True):
+        return [f"translated:{self.last_text}"]
+
+
+class _FakeModel:
+    def generate(self, **_kwargs):
+        return [[1, 2, 3]]
+
+
 def _make_service() -> OpusMTService:
     service = OpusMTService(SimpleNamespace(mt_backend="opus", opus_pt_target_token=">>pt_BR<<"))
     service._executor = _InlineExecutor()
@@ -36,7 +67,14 @@ def _make_service() -> OpusMTService:
 
 
 def _make_nllb_service() -> OpusMTService:
-    return OpusMTService(SimpleNamespace(mt_backend="nllb"))
+    return OpusMTService(
+        SimpleNamespace(
+            mt_backend="nllb",
+            opus_num_beams=1,
+            opus_max_new_tokens=64,
+            opus_length_penalty=1.0,
+        )
+    )
 
 
 class LanguageSupportTests(unittest.TestCase):
@@ -153,6 +191,17 @@ class LanguageSupportTests(unittest.TestCase):
                 "nineteen.",
                 "short sentence.",
             ],
+        )
+
+    def test_nllb_unit_translation_uses_local_text_argument(self) -> None:
+        service = _make_nllb_service()
+        service.device = "cpu"  # type: ignore[assignment]
+        service._nllb_tokenizer = _FakeTokenizer()
+        service._nllb_model = _FakeModel()
+
+        self.assertEqual(
+            service._translate_nllb_unit(" local text ", "en", "id"),
+            "translated:local text",
         )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from services.tts_service import TTSService
 
 BASE_DIR = Path(__file__).resolve().parent
 settings = load_settings()
+logger = logging.getLogger("wavestream")
 
 
 class TranslationResponse(BaseModel):
@@ -106,6 +108,7 @@ async def translate_audio(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Translation request failed")
         raise HTTPException(status_code=500, detail=f"Translation failed: {exc}") from exc
 
     return TranslationResponse(
@@ -139,6 +142,7 @@ async def text_to_speech(
             language,
         )
     except Exception as exc:
+        logger.exception("TTS request failed")
         raise HTTPException(status_code=500, detail=f"TTS failed: {exc}") from exc
 
     return Response(
