@@ -27,6 +27,7 @@ _INDONESIAN_CODES = frozenset({"id", "ind"})
 _JAPANESE_CODES = frozenset({"ja", "jpn"})
 _PORTUGUESE_CODES = frozenset({"pt", "pt_br", "por"})
 _FILIPINO_CODES = frozenset({"tl", "tgl", "fil"})
+_MALAY_CODES = frozenset({"ms", "msa", "may", "zlm", "zsm"})
 
 _NLLB_LANG_CODES = {
     "en": "eng_Latn",
@@ -41,6 +42,11 @@ _NLLB_LANG_CODES = {
     "tl": "tgl_Latn",
     "tgl": "tgl_Latn",
     "fil": "tgl_Latn",
+    "ms": "zsm_Latn",
+    "msa": "zsm_Latn",
+    "may": "zsm_Latn",
+    "zlm": "zsm_Latn",
+    "zsm": "zsm_Latn",
 }
 
 
@@ -48,6 +54,7 @@ _NLLB_LANG_CODES = {
 class OpusTranslationResult:
     indonesian: str
     japanese: str
+    malay: str
     portuguese: str
     filipino: str
 
@@ -86,6 +93,10 @@ class OpusMTService:
         self._tl_tokenizer: MarianTokenizer | None = None
         self._tl_model: MarianMTModel | None = None
 
+        # English → Malay
+        self._ms_tokenizer: MarianTokenizer | None = None
+        self._ms_model: MarianMTModel | None = None
+
         # Indonesian → English
         self._id_en_tokenizer: MarianTokenizer | None = None
         self._id_en_model: MarianMTModel | None = None
@@ -102,10 +113,14 @@ class OpusMTService:
         self._tl_en_tokenizer: MarianTokenizer | None = None
         self._tl_en_model: MarianMTModel | None = None
 
+        # Malay → English
+        self._ms_en_tokenizer: MarianTokenizer | None = None
+        self._ms_en_model: MarianMTModel | None = None
+
         # Persistent worker pool — avoids spinning up two threads per request.
-        # max_workers=4 because at most we run four EN→target translations.
+        # max_workers=5 because at most we run five EN→target translations.
         self._executor = ThreadPoolExecutor(
-            max_workers=4, thread_name_prefix="opus-mt"
+            max_workers=5, thread_name_prefix="opus-mt"
         )
 
     def shutdown(self) -> None:
@@ -138,6 +153,9 @@ class OpusMTService:
         self._tl_tokenizer, self._tl_model = self._load_model(
             self.settings.opus_tl_model_id
         )
+        self._ms_tokenizer, self._ms_model = self._load_model(
+            self.settings.opus_ms_model_id
+        )
         self._id_en_tokenizer, self._id_en_model = self._load_model(
             self.settings.opus_id_en_model_id
         )
@@ -149,6 +167,9 @@ class OpusMTService:
         )
         self._tl_en_tokenizer, self._tl_en_model = self._load_model(
             self.settings.opus_tl_en_model_id
+        )
+        self._ms_en_tokenizer, self._ms_en_model = self._load_model(
+            self.settings.opus_ms_en_model_id
         )
 
     def _load_model(
@@ -225,6 +246,7 @@ class OpusMTService:
         source_japanese: str = "",
         source_portuguese: str = "",
         source_filipino: str = "",
+        source_malay: str = "",
     ) -> OpusTranslationResult:
         """
         Translate English text into every non-source target language.
@@ -239,6 +261,7 @@ class OpusMTService:
             source_japanese:    Original transcript to reuse when source=JA.
             source_portuguese:  Original transcript to reuse when source=PT.
             source_filipino:    Original transcript to reuse when source=TL.
+            source_malay:       Original transcript to reuse when source=MS.
         """
         lang = normalize_lang_key(detected_language)
 
@@ -250,23 +273,27 @@ class OpusMTService:
                 source_japanese=source_japanese,
                 source_portuguese=source_portuguese,
                 source_filipino=source_filipino,
+                source_malay=source_malay,
             )
 
         need_id = lang not in _INDONESIAN_CODES
         need_ja = lang not in _JAPANESE_CODES
         need_pt = lang not in _PORTUGUESE_CODES
         need_tl = lang not in _FILIPINO_CODES
+        need_ms = lang not in _MALAY_CODES
 
         indonesian: str = source_indonesian if not need_id else ""
         japanese: str = source_japanese if not need_ja else ""
         portuguese: str = source_portuguese if not need_pt else ""
         filipino: str = source_filipino if not need_tl else ""
+        malay: str = source_malay if not need_ms else ""
 
         # Defensive no-op if every target is somehow already satisfied.
-        if not any((need_id, need_ja, need_pt, need_tl)):
+        if not any((need_id, need_ja, need_pt, need_tl, need_ms)):
             return OpusTranslationResult(
                 indonesian=indonesian,
                 japanese=japanese,
+                malay=malay,
                 portuguese=portuguese,
                 filipino=filipino,
             )
@@ -301,6 +328,14 @@ class OpusMTService:
                 self._tl_tokenizer,
                 self._tl_model,
             )
+        if need_ms:
+            futures["ms"] = self._executor.submit(
+                self._translate_text,
+                english_text,
+                self._ms_tokenizer,
+                self._ms_model,
+                self.settings.opus_ms_target_token,
+            )
 
         if "id" in futures:
             indonesian = futures["id"].result()
@@ -310,10 +345,13 @@ class OpusMTService:
             portuguese = futures["pt"].result()
         if "tl" in futures:
             filipino = futures["tl"].result()
+        if "ms" in futures:
+            malay = futures["ms"].result()
 
         return OpusTranslationResult(
             indonesian=indonesian,
             japanese=japanese,
+            malay=malay,
             portuguese=portuguese,
             filipino=filipino,
         )
@@ -335,6 +373,8 @@ class OpusMTService:
             return self._translate_text(text, self._pt_en_tokenizer, self._pt_en_model)
         if lang in _FILIPINO_CODES:
             return self._translate_text(text, self._tl_en_tokenizer, self._tl_en_model)
+        if lang in _MALAY_CODES:
+            return self._translate_text(text, self._ms_en_tokenizer, self._ms_en_model)
         return None
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -349,6 +389,7 @@ class OpusMTService:
         source_japanese: str = "",
         source_portuguese: str = "",
         source_filipino: str = "",
+        source_malay: str = "",
     ) -> OpusTranslationResult:
         lang = normalize_lang_key(detected_language)
 
@@ -356,16 +397,19 @@ class OpusMTService:
         need_ja = lang not in _JAPANESE_CODES
         need_pt = lang not in _PORTUGUESE_CODES
         need_tl = lang not in _FILIPINO_CODES
+        need_ms = lang not in _MALAY_CODES
 
         indonesian = source_indonesian if not need_id else ""
         japanese = source_japanese if not need_ja else ""
         portuguese = source_portuguese if not need_pt else ""
         filipino = source_filipino if not need_tl else ""
+        malay = source_malay if not need_ms else ""
 
-        if not any((need_id, need_ja, need_pt, need_tl)):
+        if not any((need_id, need_ja, need_pt, need_tl, need_ms)):
             return OpusTranslationResult(
                 indonesian=indonesian,
                 japanese=japanese,
+                malay=malay,
                 portuguese=portuguese,
                 filipino=filipino,
             )
@@ -378,10 +422,13 @@ class OpusMTService:
             portuguese = self._translate_nllb(english_text, "en", "pt")
         if need_tl:
             filipino = self._translate_nllb(english_text, "en", "tl")
+        if need_ms:
+            malay = self._translate_nllb(english_text, "en", "ms")
 
         return OpusTranslationResult(
             indonesian=indonesian,
             japanese=japanese,
+            malay=malay,
             portuguese=portuguese,
             filipino=filipino,
         )

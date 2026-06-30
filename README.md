@@ -1,6 +1,6 @@
 # RunPod Voice Translation App
 
-Push-to-talk voice translation app for RunPod with a browser mic UI, FastAPI backend, multilingual translation output, and optional text-to-speech playback.
+Push-to-talk voice translation app for RunPod with a browser mic UI, FastAPI backend, multilingual translation output, and optional text-to-speech playback. A lightweight UI-only mode serves the browser experience locally without importing or loading the ML stack.
 
 The current repo is an app-first deployment, not a notebook-only snapshot. The live server boots from `app.py`, serves `templates/index.html`, and loads the translation plus TTS services on startup.
 
@@ -13,6 +13,7 @@ The current repo is an app-first deployment, not a notebook-only snapshot. The l
 5. The MT backend translates the English text into:
    - Indonesian
    - Japanese
+   - Malay (Malaysia)
    - Brazilian Portuguese
    - Filipino
 6. The UI renders the source transcript plus supported-language outputs:
@@ -20,6 +21,7 @@ The current repo is an app-first deployment, not a notebook-only snapshot. The l
    - English
    - Indonesian
    - Japanese
+   - Malay (Malaysia)
    - Brazilian Portuguese
    - Filipino
 7. The browser can request generated speech from `POST /api/tts`.
@@ -38,14 +40,17 @@ These are the models loaded by default from [`services/config.py`](/home/ravhi/r
 | English -> Japanese MT fallback | `Helsinki-NLP/opus-mt-en-jap` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Brazilian Portuguese MT fallback | `Helsinki-NLP/opus-mt-en-ROMANCE` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English -> Filipino MT fallback | `Helsinki-NLP/opus-mt-en-tl` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| English -> Malay MT fallback | `Helsinki-NLP/opus-mt-en-map` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Indonesian -> English MT fallback | `Helsinki-NLP/opus-mt-id-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Japanese -> English MT fallback | `staka/fugumt-ja-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Portuguese -> English MT fallback | `Helsinki-NLP/opus-mt-ROMANCE-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | Filipino -> English MT fallback | `Helsinki-NLP/opus-mt-tl-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
+| Malay -> English MT fallback | `Helsinki-NLP/opus-mt-mul-en` | [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:16) |
 | English TTS | `facebook/mms-tts-eng` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Indonesian TTS | `facebook/mms-tts-ind` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Portuguese TTS | `facebook/mms-tts-por` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Filipino TTS | `facebook/mms-tts-tgl` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
+| Malay TTS | `facebook/mms-tts-zlm` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 | Japanese TTS | `suno/bark-small` | [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:153) |
 
 ### Supported configurable model variants
@@ -69,7 +74,7 @@ The code also explicitly supports these model IDs or model swaps:
 - [`app.py`](/home/ravhi/runpod_jupyter/app.py:1): FastAPI entrypoint, startup lifecycle, API routes
 - [`services/pipeline.py`](/home/ravhi/runpod_jupyter/services/pipeline.py:1): orchestrates Whisper and OpusMT
 - [`services/whisper_service.py`](/home/ravhi/runpod_jupyter/services/whisper_service.py:1): transcription and English translation
-- [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:1): parallel EN -> ID and EN -> JA translation
+- [`services/opus_service.py`](/home/ravhi/runpod_jupyter/services/opus_service.py:1): NLLB or parallel per-language OpusMT translation
 - [`services/tts_service.py`](/home/ravhi/runpod_jupyter/services/tts_service.py:1): multilingual speech synthesis
 - [`services/audio.py`](/home/ravhi/runpod_jupyter/services/audio.py:1): decode, chunking, preprocessing
 - [`templates/index.html`](/home/ravhi/runpod_jupyter/templates/index.html:1): single-page browser UI
@@ -93,6 +98,7 @@ Returns:
 - `translationEnglish`
 - `translationIndonesian`
 - `translationJapanese`
+- `translationMalay`
 - `translationPortuguese`
 - `translationFilipino`
 - `audioDurationSeconds`
@@ -141,12 +147,28 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 
 6. Open the RunPod public HTTP URL for port `8880`.
 
+## Local UI-Only Development
+
+Install only the web dependencies and start the server without importing Torch, Transformers, Whisper, translation, or TTS services:
+
+```bash
+pip install -r requirements-ui.txt
+./start.sh --ui-only
+```
+
+Then open `http://localhost:8880`. The page is the real production UI; `POST /api/translate` and `POST /api/tts` deliberately return HTTP `503` in this mode. The equivalent direct launch is:
+
+```bash
+UI_ONLY=true python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
+```
+
 ## Environment Variables
 
 ### Server
 
 - `HOST=0.0.0.0`
 - `PORT=8880`
+- `UI_ONLY=false`
 
 ### Whisper
 
@@ -176,11 +198,14 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `OPUS_JA_MODEL_ID=Helsinki-NLP/opus-mt-en-jap`
 - `OPUS_PT_MODEL_ID=Helsinki-NLP/opus-mt-en-ROMANCE`
 - `OPUS_TL_MODEL_ID=Helsinki-NLP/opus-mt-en-tl`
+- `OPUS_MS_MODEL_ID=Helsinki-NLP/opus-mt-en-map`
 - `OPUS_ID_EN_MODEL_ID=Helsinki-NLP/opus-mt-id-en`
 - `OPUS_JA_EN_MODEL_ID=staka/fugumt-ja-en` (FuGuMT, drop-in MarianMT replacement — dramatically more faithful than `Helsinki-NLP/opus-mt-ja-en` on conversational JA)
 - `OPUS_PT_EN_MODEL_ID=Helsinki-NLP/opus-mt-ROMANCE-en`
 - `OPUS_TL_EN_MODEL_ID=Helsinki-NLP/opus-mt-tl-en`
+- `OPUS_MS_EN_MODEL_ID=Helsinki-NLP/opus-mt-mul-en`
 - `OPUS_PT_TARGET_TOKEN='>>pt_BR<<'`
+- `OPUS_MS_TARGET_TOKEN='>>zsm_Latn<<'`
 - `OPUS_NUM_BEAMS=2`
 - `OPUS_MAX_NEW_TOKENS=384`
 - `OPUS_NO_REPEAT_NGRAM_SIZE=0`
@@ -192,10 +217,11 @@ python3 -m uvicorn app:app --host 0.0.0.0 --port 8880
 - `TTS_ID_MODEL_ID=facebook/mms-tts-ind`
 - `TTS_PT_MODEL_ID=facebook/mms-tts-por`
 - `TTS_TL_MODEL_ID=facebook/mms-tts-tgl`
+- `TTS_MS_MODEL_ID=facebook/mms-tts-zlm`
 - `TTS_JA_MODEL_ID=suno/bark-small`
 - `TTS_JA_VOICE=v2/ja_speaker_0`
 - `TTS_SPEAKING_RATE=1.0`
-- `TTS_PRELOAD_LANGUAGES=en,id,pt,tl,ja`
+- `TTS_PRELOAD_LANGUAGES=en,id,ms,pt,tl,ja`
 
 ### Shared runtime/audio
 
@@ -221,14 +247,17 @@ These are practical deployment requirements for the current default stack in thi
 - `Helsinki-NLP/opus-mt-en-jap`
 - `Helsinki-NLP/opus-mt-en-ROMANCE`
 - `Helsinki-NLP/opus-mt-en-tl`
+- `Helsinki-NLP/opus-mt-en-map`
 - `Helsinki-NLP/opus-mt-id-en`
 - `staka/fugumt-ja-en`
 - `Helsinki-NLP/opus-mt-ROMANCE-en`
 - `Helsinki-NLP/opus-mt-tl-en`
+- `Helsinki-NLP/opus-mt-mul-en`
 - `facebook/mms-tts-eng`
 - `facebook/mms-tts-ind`
 - `facebook/mms-tts-por`
 - `facebook/mms-tts-tgl`
+- `facebook/mms-tts-zlm`
 - `suno/bark-small`
 
 They are not hard-coded startup checks, but they reflect what you should provision if you want the app to feel responsive.
@@ -250,7 +279,7 @@ This tier is the practical floor for the shipped defaults. It may still feel tig
 - System RAM: `24-32 GB`
 - Disk: `55 GB+` free SSD space
 
-This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with the default Whisper, eight OpusMT models, and multilingual TTS loaded together.
+This is the safer target for smoother startup, fewer memory-pressure issues, and better interactive latency with Whisper, ten OpusMT fallback models, and multilingual TTS loaded together.
 
 ### Low-spec or fallback mode
 
@@ -263,12 +292,13 @@ This is the safer target for smoother startup, fewer memory-pressure issues, and
 ### Provisioning notes
 
 - The Japanese TTS path is the heaviest extra TTS load in the default setup because it uses `suno/bark-small`.
-- The eight OpusMT models and four MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
+- The ten OpusMT fallback models and five MMS TTS models are comparatively lighter, but they still add memory and download size on top of Whisper.
 - Use SSD-backed storage. First boot can be much slower if the model cache has to be downloaded into a cold environment.
 - Match your PyTorch install to the CUDA version on the machine or RunPod image before starting the service.
 
 ## Notes
 
 - The app startup logs the exact loaded model IDs for Whisper, OpusMT, and TTS.
+- `UI_ONLY=true` skips ML imports and model initialization; it is for interface inspection, not inference.
 - The current codebase does not include a checked-in notebook file in this directory.
 - No runtime inference validation was executed as part of this README update.

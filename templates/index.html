@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexto StreamWave</title>
-    <meta name="description" content="Nexto StreamWave — real-time voice translation between Japanese, English, Indonesian, Brazilian Portuguese, and Filipino." />
+    <meta name="description" content="Nexto StreamWave — real-time voice translation between Japanese, English, Indonesian, Malay, Brazilian Portuguese, and Filipino." />
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -37,6 +37,7 @@
         --ja-clr: #e06c6c;
         --en-clr: #7aabe8;
         --id-clr: #6cc98f;
+        --ms-clr: #57c7c2;
         --pt-clr: #d4b34f;
         --tl-clr: #c884f0;
       }
@@ -120,12 +121,6 @@
         font-size: 1.625rem; font-weight: 600;
         letter-spacing: -0.025em; color: var(--text); line-height: 1.25;
       }
-      .tagline-sub {
-        margin-top: 0.375rem;
-        font-size: 0.8125rem; color: var(--text-muted); line-height: 1.65;
-        max-width: 34ch;
-      }
-
       /* language badge row */
       .lang-trio {
         display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
@@ -142,6 +137,7 @@
       .trio-tag.ja { color: var(--ja-clr); border-color: rgba(224,108,108,0.3); }
       .trio-tag.en { color: var(--en-clr); border-color: rgba(122,171,232,0.3); }
       .trio-tag.id { color: var(--id-clr); border-color: rgba(108,201,143,0.3); }
+      .trio-tag.ms { color: var(--ms-clr); border-color: rgba(87,199,194,0.3); }
       .trio-tag.pt { color: var(--pt-clr); border-color: rgba(212,179,79,0.3); }
       .trio-tag.tl { color: var(--tl-clr); border-color: rgba(200,132,240,0.3); }
 
@@ -332,13 +328,13 @@
 
       /* ─── Result modal ─── */
       .result-modal {
-        width: 100%; max-width: 960px;
+        width: 100%; max-width: 1440px;
         background: var(--surface);
         border: 1px solid var(--border-strong);
         border-radius: 20px;
         overflow: hidden;
         animation: slide-up 0.28s cubic-bezier(0.16,1,0.3,1);
-        max-height: calc(100dvh - 3rem);
+        max-height: calc(100dvh - 2rem);
         display: flex; flex-direction: column;
       }
       @keyframes slide-up {
@@ -418,6 +414,7 @@
       .lang-dot.ja { background: var(--ja-clr); box-shadow: 0 0 6px rgba(224,108,108,0.5); }
       .lang-dot.en { background: var(--en-clr); box-shadow: 0 0 6px rgba(122,171,232,0.5); }
       .lang-dot.id { background: var(--id-clr); box-shadow: 0 0 6px rgba(108,201,143,0.5); }
+      .lang-dot.ms { background: var(--ms-clr); box-shadow: 0 0 6px rgba(87,199,194,0.5); }
       .lang-dot.pt { background: var(--pt-clr); box-shadow: 0 0 6px rgba(212,179,79,0.5); }
       .lang-dot.tl { background: var(--tl-clr); box-shadow: 0 0 6px rgba(200,132,240,0.5); }
       .lang-dot.src { background: var(--text-muted); }
@@ -775,13 +772,14 @@
       <div class="card">
         <div>
           <h1 class="tagline-title">Speak once.<br>Understood by all.</h1>
-          <p class="tagline-sub">Real-time voice translation across Japanese, English, Indonesian, Brazilian Portuguese, and Filipino.</p>
           <div class="lang-trio">
             <span class="trio-tag ja">日本語</span>
             <span class="trio-sep">↔</span>
             <span class="trio-tag en">English</span>
             <span class="trio-sep">↔</span>
             <span class="trio-tag id">Indonesia</span>
+            <span class="trio-sep">↔</span>
+            <span class="trio-tag ms">Bahasa Melayu</span>
             <span class="trio-sep">↔</span>
             <span class="trio-tag pt">Português BR</span>
             <span class="trio-sep">↔</span>
@@ -1017,6 +1015,11 @@
         eng: { label: 'English',    tag: 'EN', dotClass: 'en', nativeName: 'English' },
         id:  { label: 'Indonesian', tag: 'ID', dotClass: 'id', nativeName: 'Indonesia' },
         ind: { label: 'Indonesian', tag: 'ID', dotClass: 'id', nativeName: 'Indonesia' },
+        ms:  { label: 'Malay (Malaysia)', tag: 'MS', dotClass: 'ms', nativeName: 'Bahasa Melayu' },
+        msa: { label: 'Malay (Malaysia)', tag: 'MS', dotClass: 'ms', nativeName: 'Bahasa Melayu' },
+        may: { label: 'Malay (Malaysia)', tag: 'MS', dotClass: 'ms', nativeName: 'Bahasa Melayu' },
+        zlm: { label: 'Malay (Malaysia)', tag: 'MS', dotClass: 'ms', nativeName: 'Bahasa Melayu' },
+        zsm: { label: 'Malay (Malaysia)', tag: 'MS', dotClass: 'ms', nativeName: 'Bahasa Melayu' },
         pt:  { label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', nativeName: 'Português BR' },
         por: { label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', nativeName: 'Português BR' },
         pt_br: { label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', nativeName: 'Português BR' },
@@ -1031,6 +1034,7 @@
         { key: 'en', label: 'English', tag: 'EN', dotClass: 'en', lang: 'en', field: 'translationEnglish', aliases: ['en', 'eng'] },
         { key: 'ja', label: 'Japanese', tag: 'JA', dotClass: 'ja', lang: 'ja', field: 'translationJapanese', aliases: ['ja', 'jpn'] },
         { key: 'id', label: 'Indonesian', tag: 'ID', dotClass: 'id', lang: 'id', field: 'translationIndonesian', aliases: ['id', 'ind'] },
+        { key: 'ms', label: 'Malay (Malaysia)', tag: 'MS', dotClass: 'ms', lang: 'ms', field: 'translationMalay', aliases: ['ms', 'msa', 'may', 'zlm', 'zsm'] },
         { key: 'pt', label: 'Portuguese (Brazil)', tag: 'PT', dotClass: 'pt', lang: 'pt', field: 'translationPortuguese', aliases: ['pt', 'pt_br', 'por'] },
         { key: 'tl', label: 'Filipino', tag: 'FIL', dotClass: 'tl', lang: 'tl', field: 'translationFilipino', aliases: ['tl', 'tgl', 'fil'] },
       ];

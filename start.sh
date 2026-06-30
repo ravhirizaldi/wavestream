@@ -6,6 +6,8 @@
 #   ./start.sh -d             # background (daemonize); writes PID + log
 #   ./start.sh -s             # stop the background instance
 #   ./start.sh -e <env-file>  # override env file (default: .env.production)
+#   ./start.sh -u             # UI-only mode; do not import or load ML models
+#   ./start.sh --ui-only      # same as -u
 #   ./start.sh -h             # help
 #
 # In background mode the env file (if present) is sourced before launch, the
@@ -20,25 +22,39 @@ RUN_DIR=".run"
 PID_FILE="$RUN_DIR/wavestream.pid"
 LOG_FILE="$RUN_DIR/wavestream.log"
 MODE="foreground"
+UI_ONLY_REQUESTED="false"
 STOP_TIMEOUT_S=15
 
 usage() {
   cat <<EOF
-Usage: $0 [-d|-s|-f] [-e ENV_FILE]
+Usage: $0 [-d|-s|-f] [-u|--ui-only] [-e ENV_FILE]
 
   -d            run in background; PID -> $PID_FILE, logs -> $LOG_FILE
   -s            stop a background instance started with -d
   -f            run in foreground (default)
   -e ENV_FILE   env file to source before launch (default: $ENV_FILE)
+  -u, --ui-only serve the web UI without importing or loading ML models
   -h            show this help
 EOF
 }
 
-while getopts "dsfe:h" opt; do
+# Normalize the descriptive long option while preserving the existing getopts
+# behavior for short flags (including combined short options).
+NORMALIZED_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --ui-only) NORMALIZED_ARGS+=("-u") ;;
+    *) NORMALIZED_ARGS+=("$arg") ;;
+  esac
+done
+set -- "${NORMALIZED_ARGS[@]}"
+
+while getopts "dsfue:h" opt; do
   case "$opt" in
     d) MODE="background" ;;
     s) MODE="stop" ;;
     f) MODE="foreground" ;;
+    u) UI_ONLY_REQUESTED="true" ;;
     e) ENV_FILE="$OPTARG" ;;
     h) usage; exit 0 ;;
     *) usage; exit 2 ;;
@@ -80,6 +96,10 @@ fi
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   set -a; source "$ENV_FILE"; set +a
+fi
+
+if [[ "$UI_ONLY_REQUESTED" == "true" ]]; then
+  export UI_ONLY=true
 fi
 
 export HOST="${HOST:-0.0.0.0}"

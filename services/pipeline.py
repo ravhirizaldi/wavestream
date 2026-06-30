@@ -14,6 +14,7 @@ _JAPANESE_CODES  = frozenset({"ja", "jpn"})
 _INDONESIAN_CODES = frozenset({"id", "ind"})
 _PORTUGUESE_CODES = frozenset({"pt", "pt_br", "por"})
 _FILIPINO_CODES = frozenset({"tl", "tgl", "fil"})
+_MALAY_CODES = frozenset({"ms", "msa", "may", "zlm", "zsm"})
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class TranslationResponsePayload:
     translation_english: str
     translation_indonesian: str
     translation_japanese: str
+    translation_malay: str
     translation_portuguese: str
     translation_filipino: str
     audio_duration_seconds: float
@@ -34,7 +36,7 @@ class TranslationResponsePayload:
 
 class TranslationPipeline:
     """
-    Multilingual pipeline — Japanese / English / Indonesian / Portuguese / Filipino.
+    Multilingual pipeline — Japanese / English / Indonesian / Malay / Portuguese / Filipino.
 
     Flow
     ────
@@ -47,6 +49,7 @@ class TranslationPipeline:
         · Helsinki-NLP/opus-mt-en-jap  English → Japanese
         · Helsinki-NLP/opus-mt-en-ROMANCE  English → Portuguese
         · Helsinki-NLP/opus-mt-en-tl   English → Filipino / Tagalog
+        · Helsinki-NLP/opus-mt-en-map  English → Malay
 
         Smart skip: if the source is already one of the target languages, that
         target model call is skipped and the original transcript is reused
@@ -58,6 +61,7 @@ class TranslationPipeline:
     Indonesian    (id)  transcript=ID  EN=Whisper  ID=transcript
     Portuguese    (pt)  transcript=PT  EN=Whisper  PT=transcript
     Filipino      (tl)  transcript=TL  EN=Whisper  TL=transcript
+    Malay         (ms)  transcript=MS  EN=Whisper  MS=transcript
     English       (en)  transcript=EN  EN=transcript  targets=OPUS
     Other               transcript=XX  EN=Whisper  targets=OPUS
     """
@@ -109,6 +113,7 @@ class TranslationPipeline:
         source_as_japanese   = transcription.transcript if lang in _JAPANESE_CODES   else ""
         source_as_portuguese = transcription.transcript if lang in _PORTUGUESE_CODES else ""
         source_as_filipino   = transcription.transcript if lang in _FILIPINO_CODES   else ""
+        source_as_malay      = transcription.transcript if lang in _MALAY_CODES      else ""
 
         # ── Step 3: OpusMT — EN→targets in parallel ─────────────────────
         opus_started_at = time.perf_counter()
@@ -119,6 +124,7 @@ class TranslationPipeline:
             source_japanese=source_as_japanese,
             source_portuguese=source_as_portuguese,
             source_filipino=source_as_filipino,
+            source_malay=source_as_malay,
         )
         stage_timings["opus"] = time.perf_counter() - opus_started_at
         total_processing_seconds = time.perf_counter() - started_at
@@ -138,6 +144,7 @@ class TranslationPipeline:
             translation_english=english_text,
             translation_indonesian=opus_result.indonesian,
             translation_japanese=opus_result.japanese,
+            translation_malay=opus_result.malay,
             translation_portuguese=opus_result.portuguese,
             translation_filipino=opus_result.filipino,
             audio_duration_seconds=transcription.audio_duration_seconds,

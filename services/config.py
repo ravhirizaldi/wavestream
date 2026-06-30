@@ -30,6 +30,7 @@ def _env_str(name: str, default: str) -> str:
 class Settings:
     host: str
     port: int
+    ui_only: bool
     # ── Whisper (transcription + built-in EN translation) ──────────────────
     whisper_backend: str
     whisper_model_id: str
@@ -53,11 +54,14 @@ class Settings:
     opus_ja_model_id: str   # English → Japanese
     opus_pt_model_id: str   # English → Portuguese
     opus_tl_model_id: str   # English → Filipino / Tagalog
+    opus_ms_model_id: str   # English → Malay
     opus_id_en_model_id: str # Indonesian → English
     opus_ja_en_model_id: str # Japanese → English
     opus_pt_en_model_id: str # Portuguese → English
     opus_tl_en_model_id: str # Filipino / Tagalog → English
+    opus_ms_en_model_id: str # Malay → English
     opus_pt_target_token: str # Target token for multilingual EN → Romance model
+    opus_ms_target_token: str # Target token for multilingual EN → Austronesian model
     opus_num_beams: int
     opus_max_new_tokens: int
     opus_no_repeat_ngram_size: int
@@ -69,6 +73,7 @@ class Settings:
     tts_id_model_id: str     # VITS MMS model for Indonesian
     tts_pt_model_id: str     # VITS MMS model for Portuguese
     tts_tl_model_id: str     # VITS MMS model for Filipino / Tagalog
+    tts_ms_model_id: str     # VITS MMS model for Malay
     tts_speaking_rate: float # 1.0 = normal, 0.9 = slower, 1.1 = faster
     tts_preload_languages: str  # comma-separated, e.g. "en,id" — others lazy-loaded
     # ── Shared ────────────────────────────────────────────────────────────
@@ -88,6 +93,7 @@ def load_settings() -> Settings:
     return Settings(
         host=_env_str("HOST", "0.0.0.0"),
         port=_env_int("PORT", 8880),
+        ui_only=_env_bool("UI_ONLY", False),
         # Whisper
         whisper_backend=_env_str("WHISPER_BACKEND", "faster-whisper"),
         whisper_model_id=_env_str("WHISPER_MODEL_ID", "openai/whisper-large-v3"),
@@ -116,6 +122,7 @@ def load_settings() -> Settings:
         opus_ja_model_id=_env_str("OPUS_JA_MODEL_ID", "Helsinki-NLP/opus-mt-en-jap"),
         opus_pt_model_id=_env_str("OPUS_PT_MODEL_ID", "Helsinki-NLP/opus-mt-en-ROMANCE"),
         opus_tl_model_id=_env_str("OPUS_TL_MODEL_ID", "Helsinki-NLP/opus-mt-en-tl"),
+        opus_ms_model_id=_env_str("OPUS_MS_MODEL_ID", "Helsinki-NLP/opus-mt-en-map"),
         opus_id_en_model_id=_env_str("OPUS_ID_EN_MODEL_ID", "Helsinki-NLP/opus-mt-id-en"),
         # FuGuMT (Marian-NMT, ~280 MB) is dramatically more faithful than
         # Helsinki-NLP/opus-mt-ja-en on conversational Japanese with
@@ -124,7 +131,9 @@ def load_settings() -> Settings:
         opus_ja_en_model_id=_env_str("OPUS_JA_EN_MODEL_ID", "staka/fugumt-ja-en"),
         opus_pt_en_model_id=_env_str("OPUS_PT_EN_MODEL_ID", "Helsinki-NLP/opus-mt-ROMANCE-en"),
         opus_tl_en_model_id=_env_str("OPUS_TL_EN_MODEL_ID", "Helsinki-NLP/opus-mt-tl-en"),
+        opus_ms_en_model_id=_env_str("OPUS_MS_EN_MODEL_ID", "Helsinki-NLP/opus-mt-mul-en"),
         opus_pt_target_token=_env_str("OPUS_PT_TARGET_TOKEN", ">>pt_BR<<"),
+        opus_ms_target_token=_env_str("OPUS_MS_TARGET_TOKEN", ">>zsm_Latn<<"),
         # FuGuMT-ja-en is most faithful at low beams (1-3) and degenerates at
         # beams >= 5 ("Aocke-Japhanese ... populto-popultoer ..."). Helsinki-NLP
         # models in the other directions are insensitive to this range, so 2
@@ -143,11 +152,12 @@ def load_settings() -> Settings:
         tts_id_model_id=_env_str("TTS_ID_MODEL_ID", "facebook/mms-tts-ind"),
         tts_pt_model_id=_env_str("TTS_PT_MODEL_ID", "facebook/mms-tts-por"),
         tts_tl_model_id=_env_str("TTS_TL_MODEL_ID", "facebook/mms-tts-tgl"),
+        tts_ms_model_id=_env_str("TTS_MS_MODEL_ID", "facebook/mms-tts-zlm"),
         tts_speaking_rate=_env_float("TTS_SPEAKING_RATE", 1.0),
         # Languages whose TTS backend should be eager-loaded at startup.
         # Anything not listed here is loaded lazily on first synth request.
-        # Default skips "ja" because Bark (~1.5 GB) dominates startup time.
-        tts_preload_languages=_env_str("TTS_PRELOAD_LANGUAGES", "en,id,pt,tl,ja"),
+        # Production defaults preload every configured language.
+        tts_preload_languages=_env_str("TTS_PRELOAD_LANGUAGES", "en,id,ms,pt,tl,ja"),
         # Shared
         hf_token=os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN"),
         preferred_device=os.getenv("MODEL_DEVICE"),

@@ -28,6 +28,7 @@ _LANG_ALIASES: dict[str, str] = {
     "id": "id", "ind": "id",
     "pt": "pt", "pt_br": "pt", "por": "pt",
     "tl": "tl", "tgl": "tl", "fil": "tl",
+    "ms": "ms", "msa": "ms", "may": "ms", "zlm": "ms", "zsm": "ms",
 }
 _DEFAULT_LANG = "en"
 
@@ -54,7 +55,7 @@ class _Backend(ABC):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VITS backend  (MMS models — EN, ID, PT, TL)
+# VITS backend  (MMS models — EN, ID, MS, PT, TL)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _VitsBackend(_Backend):
@@ -66,6 +67,7 @@ class _VitsBackend(_Backend):
         facebook/mms-tts-ind    Indonesian (~130 MB)
         facebook/mms-tts-por    Portuguese (~130 MB)
         facebook/mms-tts-tgl    Tagalog / Filipino (~130 MB)
+        facebook/mms-tts-zlm    Malay (~130 MB)
     """
 
     def __init__(self, model_id: str, hf_token: str | None, device: torch.device) -> None:
@@ -193,11 +195,12 @@ class TTSService:
         Indonesian  → VITS (facebook/mms-tts-ind)        fast, ~130 MB
         Portuguese  → VITS (facebook/mms-tts-por)        fast, ~130 MB
         Filipino    → VITS (facebook/mms-tts-tgl)        fast, ~130 MB
+        Malay       → VITS (facebook/mms-tts-zlm)        fast, ~130 MB
         Japanese    → Bark (suno/bark-small by default)  good quality, ~1.5 GB
 
     All model IDs and Bark voice preset are configurable via env vars:
         TTS_EN_MODEL_ID   TTS_ID_MODEL_ID   TTS_PT_MODEL_ID
-        TTS_TL_MODEL_ID   TTS_JA_MODEL_ID   TTS_JA_VOICE
+        TTS_TL_MODEL_ID   TTS_MS_MODEL_ID   TTS_JA_MODEL_ID   TTS_JA_VOICE
         TTS_SPEAKING_RATE
     """
 
@@ -228,6 +231,7 @@ class TTSService:
             "id": lambda: _VitsBackend(self.settings.tts_id_model_id, hf_token, device),
             "pt": lambda: _VitsBackend(self.settings.tts_pt_model_id, hf_token, device),
             "tl": lambda: _VitsBackend(self.settings.tts_tl_model_id, hf_token, device),
+            "ms": lambda: _VitsBackend(self.settings.tts_ms_model_id, hf_token, device),
             "ja": lambda: _BarkBackend(
                 model_id      = self.settings.tts_ja_model_id,
                 hf_token      = hf_token,

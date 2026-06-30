@@ -4,6 +4,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -12,8 +13,9 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from services.config import Settings, load_settings
-from services.pipeline import TranslationPipeline
-from services.tts_service import TTSService
+
+if TYPE_CHECKING:
+    from services.pipeline import TranslationPipeline
 
 BASE_DIR = Path(__file__).resolve().parent
 settings = load_settings()
@@ -28,6 +30,7 @@ class TranslationResponse(BaseModel):
     translationEnglish: str
     translationIndonesian: str
     translationJapanese: str
+    translationMalay: str
     translationPortuguese: str
     translationFilipino: str
     audioDurationSeconds: float
@@ -51,16 +54,19 @@ def _log_startup(current_settings: Settings, pipeline: TranslationPipeline) -> N
         print(f"OpusMT EN→JA     : {current_settings.opus_ja_model_id}")
         print(f"OpusMT EN→PT     : {current_settings.opus_pt_model_id}  target={current_settings.opus_pt_target_token}")
         print(f"OpusMT EN→TL     : {current_settings.opus_tl_model_id}")
+        print(f"OpusMT EN→MS     : {current_settings.opus_ms_model_id}  target={current_settings.opus_ms_target_token}")
         print(f"OpusMT ID→EN     : {current_settings.opus_id_en_model_id}")
         print(f"OpusMT JA→EN     : {current_settings.opus_ja_en_model_id}")
         print(f"OpusMT PT→EN     : {current_settings.opus_pt_en_model_id}")
         print(f"OpusMT TL→EN     : {current_settings.opus_tl_en_model_id}")
+        print(f"OpusMT MS→EN     : {current_settings.opus_ms_en_model_id}")
     print(f"MT beams          : {current_settings.opus_num_beams}")
     print(f"TTS EN            : {current_settings.tts_en_model_id}")
     print(f"TTS JA            : {current_settings.tts_ja_model_id}  voice={current_settings.tts_ja_voice}")
     print(f"TTS ID            : {current_settings.tts_id_model_id}")
     print(f"TTS PT            : {current_settings.tts_pt_model_id}")
     print(f"TTS TL            : {current_settings.tts_tl_model_id}")
+    print(f"TTS MS            : {current_settings.tts_ms_model_id}")
     print(f"Device            : {pipeline.whisper.device}")
     print(f"Dtype             : {pipeline.whisper.torch_dtype}")
     print("")
@@ -68,6 +74,22 @@ def _log_startup(current_settings: Settings, pipeline: TranslationPipeline) -> N
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.pipeline = None
+    app.state.tts = None
+    if settings.ui_only:
+        print("")
+        print("=== Wavestream UI-only mode ===")
+        print(f"Listening on http://{settings.host}:{settings.port}")
+        print("Model loading     : disabled")
+        print("")
+        yield
+        return
+
+    # Keep ML imports out of the UI-only process so a local UI preview only
+    # needs the lightweight web dependencies.
+    from services.pipeline import TranslationPipeline
+    from services.tts_service import TTSService
+
     pipeline = TranslationPipeline(settings)
     tts      = TTSService(settings)
     await run_in_threadpool(pipeline.load)
@@ -95,13 +117,19 @@ async def translate_audio(
     audio: UploadFile = File(...),
     utterance_id: str | None = Form(default=None, alias="utteranceId"),
 ) -> TranslationResponse:
+    pipeline = request.app.state.pipeline
+    if pipeline is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Inference services are disabled in UI-only mode.",
+        )
     audio_bytes = await audio.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Audio upload was empty.")
 
     try:
         payload = await run_in_threadpool(
-            request.app.state.pipeline.process_audio,
+            pipeline.process_audio,
             audio_bytes,
             utterance_id,
         )
@@ -119,6 +147,7 @@ async def translate_audio(
         translationEnglish=payload.translation_english,
         translationIndonesian=payload.translation_indonesian,
         translationJapanese=payload.translation_japanese,
+        translationMalay=payload.translation_malay,
         translationPortuguese=payload.translation_portuguese,
         translationFilipino=payload.translation_filipino,
         audioDurationSeconds=payload.audio_duration_seconds,
@@ -135,9 +164,15 @@ async def text_to_speech(
     """Synthesize speech for the given text and language, returns audio/wav."""
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="text must not be empty.")
+    tts = request.app.state.tts
+    if tts is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Inference services are disabled in UI-only mode.",
+        )
     try:
         result = await run_in_threadpool(
-            request.app.state.tts.synthesize,
+            tts.synthesize,
             text.strip(),
             language,
         )
